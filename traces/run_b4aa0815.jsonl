@@ -1,0 +1,6 @@
+{"run_id": "b4aa0815", "step": 1, "event": "run_started", "time": "01:06:48", "elapsed_ms": 181, "prompt": "List my workspace files and summarize summary.txt", "model": "qwen3.5:4b"}
+{"run_id": "b4aa0815", "step": 2, "event": "model_response", "time": "01:07:00", "elapsed_ms": 11694, "model_ms": 11512, "tool_calls": 1, "prompt_tokens": 1101, "completion_tokens": 56}
+{"run_id": "b4aa0815", "step": 3, "event": "tool_call", "time": "01:07:00", "elapsed_ms": 11695, "tool": "list_files", "args": "{}", "status": "ok", "duration_ms": 0}
+{"run_id": "b4aa0815", "step": 4, "event": "model_response", "time": "01:07:01", "elapsed_ms": 13447, "model_ms": 1751, "tool_calls": 1, "prompt_tokens": 1195, "completion_tokens": 56}
+{"run_id": "b4aa0815", "step": 5, "event": "tool_call", "time": "01:07:01", "elapsed_ms": 13448, "tool": "read_file", "args": "{'filename': 'summary.txt'}", "status": "ok", "duration_ms": 0}
+{"run_id": "b4aa0815", "step": 6, "event": "run_ended", "time": "01:07:07", "elapsed_ms": 19116, "exit_reason": "completed", "model_ms": 5667, "prompt_tokens": 1320, "completion_tokens": 192}

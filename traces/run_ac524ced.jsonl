@@ -1,0 +1,4 @@
+{"run_id": "ac524ced", "step": 1, "event": "run_started", "time": "01:00:09", "elapsed_ms": 1, "prompt": "Read demo_notes.md and tell me what the project deadline is.", "model": "qwen3.5:4b"}
+{"run_id": "ac524ced", "step": 2, "event": "model_response", "time": "01:00:12", "elapsed_ms": 2655, "model_ms": 2653, "tool_calls": 1, "prompt_tokens": 1106, "completion_tokens": 67}
+{"run_id": "ac524ced", "step": 3, "event": "tool_call", "time": "01:00:12", "elapsed_ms": 2657, "tool": "read_file", "args": "{'filename': 'demo_notes.md'}", "status": "ok", "duration_ms": 1}
+{"run_id": "ac524ced", "step": 4, "event": "run_ended", "time": "01:00:16", "elapsed_ms": 6290, "exit_reason": "completed", "model_ms": 3631, "prompt_tokens": 1267, "completion_tokens": 119}

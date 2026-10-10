@@ -1,0 +1,22 @@
+{
+  "goal": "Workspace Audit",
+  "status": "in_progress",
+  "current_step": 0,
+  "subtasks": [
+    {
+      "id": 1,
+      "description": "check files",
+      "status": "pending"
+    },
+    {
+      "id": 2,
+      "description": "read summary",
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "description": "convert time",
+      "status": "pending"
+    }
+  ]
+}

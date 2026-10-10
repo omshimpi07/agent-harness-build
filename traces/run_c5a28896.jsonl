@@ -1,0 +1,4 @@
+{"run_id": "c5a28896", "step": 1, "event": "run_started", "time": "01:22:00", "elapsed_ms": 1, "prompt": "What is my host operating system and Python version?", "model": "qwen3.5:4b"}
+{"run_id": "c5a28896", "step": 2, "event": "model_response", "time": "01:22:02", "elapsed_ms": 2458, "model_ms": 2455, "tool_calls": 1, "prompt_tokens": 1572, "completion_tokens": 57}
+{"run_id": "c5a28896", "step": 3, "event": "tool_call", "time": "01:22:02", "elapsed_ms": 2459, "tool": "get_system_info", "args": "{}", "status": "ok", "duration_ms": 0}
+{"run_id": "c5a28896", "step": 4, "event": "run_ended", "time": "01:22:04", "elapsed_ms": 4437, "exit_reason": "completed", "model_ms": 1978, "prompt_tokens": 1666, "completion_tokens": 65}

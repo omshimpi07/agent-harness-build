@@ -1,0 +1,4 @@
+{"run_id": "ca01b54e", "step": 1, "event": "run_started", "time": "01:21:41", "elapsed_ms": 207, "prompt": "calculate 450 * 12 + 85", "model": "qwen3.5:4b"}
+{"run_id": "ca01b54e", "step": 2, "event": "model_response", "time": "01:21:54", "elapsed_ms": 13103, "model_ms": 12895, "tool_calls": 1, "prompt_tokens": 1476, "completion_tokens": 86}
+{"run_id": "ca01b54e", "step": 3, "event": "tool_call", "time": "01:21:54", "elapsed_ms": 13104, "tool": "calculate", "args": "{'expression': '450 * 12 + 85'}", "status": "ok", "duration_ms": 0}
+{"run_id": "ca01b54e", "step": 4, "event": "run_ended", "time": "01:21:56", "elapsed_ms": 14683, "exit_reason": "completed", "model_ms": 1578, "prompt_tokens": 1581, "completion_tokens": 50}

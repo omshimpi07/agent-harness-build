@@ -1,0 +1,4 @@
+{"run_id": "2d218c75", "step": 1, "event": "run_started", "time": "01:22:17", "elapsed_ms": 1, "prompt": "Create a task plan called 'Workspace Audit' with 3 steps: check files, read summary, convert time", "model": "qwen3.5:4b"}
+{"run_id": "2d218c75", "step": 2, "event": "model_response", "time": "01:22:22", "elapsed_ms": 4902, "model_ms": 4899, "tool_calls": 1, "prompt_tokens": 1693, "completion_tokens": 121}
+{"run_id": "2d218c75", "step": 3, "event": "tool_call", "time": "01:22:22", "elapsed_ms": 4903, "tool": "set_task_plan", "args": "{'goal': 'Workspace Audit', 'steps': 'check files, read summary, convert time'}", "status": "ok", "duration_ms": 0}
+{"run_id": "2d218c75", "step": 4, "event": "run_ended", "time": "01:22:24", "elapsed_ms": 6947, "exit_reason": "completed", "model_ms": 2043, "prompt_tokens": 1840, "completion_tokens": 65}
