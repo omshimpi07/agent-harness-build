@@ -22,6 +22,7 @@ sys.stdout.reconfigure(encoding="utf-8")  # so emoji don't crash the Windows con
 import asyncio
 import json
 import os
+import re
 import time
 from contextlib import AsyncExitStack
 from pathlib import Path
@@ -32,6 +33,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from security import Sandbox, SecurityViolation
+from task_manager import TaskManager
 from trace import Tracer
 
 # ---------------------------------------------------------------------------
@@ -154,9 +156,48 @@ def write_file(filename: str, content: str) -> str:
             return "error: write denied by user"
     # If APPROVE_WRITES == "auto", proceed without prompting
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-    return f"wrote {filename}"
+def get_system_info() -> str:
+    """Return OS platform, CPU architecture, and Python version."""
+    import platform
+    return (
+        f"OS: {platform.system()} {platform.release()} | "
+        f"Arch: {platform.machine()} | "
+        f"Python: {platform.python_version()}"
+    )
+
+
+def calculate(expression: str) -> str:
+    """Safely evaluate basic mathematical expressions."""
+    import math
+    # Strict whitelist regex for safe math expressions
+    if not re.match(r"^[0-9\.\+\-\*\/\(\)\s\%]+$", expression):
+        return "error: expression contains forbidden characters or functions"
+    try:
+        # Limited namespace for safe arithmetic
+        safe_dict = {"__builtins__": None, "math": math}
+        res = eval(expression, safe_dict, {})
+        return str(res)
+    except Exception as e:
+        return f"error: invalid calculation ({e})"
+
+
+def set_task_plan(goal: str, steps: str) -> str:
+    """Save a multi-step execution plan to tasks.json. steps should be a comma-separated list of actions."""
+    subtasks = [{"id": i + 1, "description": s.strip(), "status": "pending"} for i, s in enumerate(steps.split(",")) if s.strip()]
+    return TaskManager.save_task(goal, subtasks)
+
+
+def update_task_step(step_id: int, status: str) -> str:
+    """Mark a plan step as 'completed' or 'failed'."""
+    return TaskManager.update_step_status(step_id, status)
+
+
+def get_task_status() -> str:
+    """Read the current status of the active tasks.json plan."""
+    task = TaskManager.load_active_task()
+    if not task:
+        return "No active task in progress."
+    return json.dumps(task, indent=2)
 
 
 LOCAL_TOOLS = {
@@ -164,6 +205,11 @@ LOCAL_TOOLS = {
     "read_file": read_file,
     "write_file": write_file,
     "save_memory": save_memory,
+    "get_system_info": get_system_info,
+    "calculate": calculate,
+    "set_task_plan": set_task_plan,
+    "update_task_step": update_task_step,
+    "get_task_status": get_task_status,
 }
 
 TOOL_SCHEMAS = [
@@ -216,6 +262,64 @@ TOOL_SCHEMAS = [
                 "properties": {"fact": {"type": "string"}},
                 "required": ["fact"],
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_system_info",
+            "description": "Get host OS platform, CPU architecture, and runtime details.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate",
+            "description": "Perform high-precision mathematical or arithmetic calculations (e.g., '128 * 45', 'sqrt(144)').",
+            "parameters": {
+                "type": "object",
+                "properties": {"expression": {"type": "string"}},
+                "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_task_plan",
+            "description": "Initialize a multi-step task checklist before starting a complex task. Persists to disk so it can resume after crashes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal": {"type": "string", "description": "High-level goal"},
+                    "steps": {"type": "string", "description": "Comma-separated list of individual action steps"},
+                },
+                "required": ["goal", "steps"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_task_step",
+            "description": "Mark a task step as completed or failed in the persistence file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "step_id": {"type": "integer"},
+                    "status": {"type": "string", "enum": ["completed", "failed", "in_progress"]},
+                },
+                "required": ["step_id", "status"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_task_status",
+            "description": "Get current checklist status of the persistent task plan.",
+            "parameters": {"type": "object", "properties": {}},
         },
     },
 ]
@@ -495,11 +599,14 @@ def handle_command(line: str) -> bool:
                         )
                     print(f"    step {event['step']:>2}: {' | '.join(parts)}")
 
+    elif cmd == "/tasks":
+        print(get_task_status())
+
     elif cmd == "/quit":
         raise SystemExit
 
     else:
-        print("  commands: /models /model <name> /tools /memory /trace /quit")
+        print("  commands: /models /model <name> /tools /memory /trace /tasks /quit")
 
     return True
 
@@ -524,7 +631,18 @@ async def main():
             f"\n  trace : traces/*.jsonl"
             f"\n{'='*55}\n"
         )
-        print("type /models, /model <name>, /tools, /memory, /trace, or just talk\n")
+
+        # ── Crash recovery check ──
+        active_task = TaskManager.load_active_task()
+        if active_task:
+            print(f"  ⚠️  RECOVERED INCOMPLETE TASK FROM PREVIOUS SESSION:")
+            print(f"     Goal: '{active_task.get('goal')}'")
+            done = sum(1 for s in active_task.get('subtasks', []) if s.get('status') == 'completed')
+            total = len(active_task.get('subtasks', []))
+            print(f"     Progress: {done}/{total} steps completed.")
+            print(f"     Type 'resume task' or inspect with /tasks\n")
+
+        print("type /models, /model <name>, /tools, /memory, /trace, /tasks, or just talk\n")
 
         try:
             while True:
