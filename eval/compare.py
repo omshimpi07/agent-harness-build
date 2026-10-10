@@ -1,13 +1,8 @@
-"""
-Before/After comparison table generator.
-Reads eval/results_baseline.json and eval/results_v5.json, prints side-by-side.
-
-Usage:
-    uv run eval/compare.py
-"""
-
 import json
+import sys
 from pathlib import Path
+
+sys.stdout.reconfigure(encoding="utf-8")
 
 ROOT = Path(__file__).parent
 
