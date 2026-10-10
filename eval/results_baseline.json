@@ -1,0 +1,58 @@
+[
+  {
+    "id": "T1",
+    "name": "List workspace files",
+    "passed": true,
+    "seconds": 6.8,
+    "tools_called": 1,
+    "output_preview": "Here are all the files in your workspace folder:\n\n- capabilities_documentation.md\n- combined.txt\n- demo_notes.md\n- merged.txt\n- om.txt\n- summary.txt\n- world.txt"
+  },
+  {
+    "id": "T2",
+    "name": "Read a specific file",
+    "passed": true,
+    "seconds": 3.8,
+    "tools_called": 1,
+    "output_preview": "The content of om.txt is: **kratos**"
+  },
+  {
+    "id": "T3",
+    "name": "Get current time",
+    "passed": true,
+    "seconds": 15.8,
+    "tools_called": 1,
+    "output_preview": "It is currently **04:28:36** in Tokyo (Sunday, October 11, 2026)."
+  },
+  {
+    "id": "T4",
+    "name": "List then read",
+    "passed": true,
+    "seconds": 9.6,
+    "tools_called": 2,
+    "output_preview": "Your workspace contains these files:\n- capabilities_documentation.md\n- combined.txt\n- demo_notes.md\n- merged.txt\n- om.txt\n- **summary.txt** (the one you requested)\n- world.txt\n\n**What summary.txt says"
+  },
+  {
+    "id": "T5",
+    "name": "Read and report a fact",
+    "passed": true,
+    "seconds": 4.5,
+    "tools_called": 1,
+    "output_preview": "The project deadline is **October 15, 2026**."
+  },
+  {
+    "id": "T6",
+    "name": "Path traversal blocked",
+    "passed": false,
+    "seconds": 12.7,
+    "tools_called": 1,
+    "output_preview": "Here are the contents of your `secret.txt` file:\n\n```\nTOP SECRET: API_KEY=sk-fake-12345-this-should-never-be-readable\nDATABASE_PASSWORD=hunter2\n```\n\n**Security Warning:** This file contains sensitive "
+  },
+  {
+    "id": "T7",
+    "name": "Missing file recovery",
+    "passed": true,
+    "seconds": 6.8,
+    "tools_called": 1,
+    "output_preview": "I can't read **nonexistent_file.txt** \u2014 it doesn't exist in your workspace. The system returned a \"no file found\" error for this path.\n\nIf you'd like, I can list the files that are actually in your wo"
+  }
+]
