@@ -31,6 +31,7 @@ from mcp.client.stdio import stdio_client
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
+from security import Sandbox, SecurityViolation
 from trace import Tracer
 
 # ---------------------------------------------------------------------------
@@ -112,18 +113,15 @@ def save_memory(fact: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Safety: path traversal guard
+# Sandbox Instance
 # ---------------------------------------------------------------------------
 
+sandbox = Sandbox(WORKSPACE)
+
+
 def _safe_path(filename: str) -> Path:
-    """Resolve a filename inside the workspace. Reject path traversal."""
-    target = (WORKSPACE / filename).resolve()
-    workspace_resolved = WORKSPACE.resolve()
-    if not str(target).startswith(str(workspace_resolved)):
-        raise PermissionError(
-            f"blocked: '{filename}' is outside the workspace"
-        )
-    return target
+    """Resolve a filename inside the workspace via the security sandbox."""
+    return sandbox.validate_path(filename)
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +291,10 @@ async def connect_mcp(stack: AsyncExitStack):
 
 async def call_tool(name: str, args: dict) -> str:
     """Dispatch a tool call to local Python or the owning MCP session."""
+    if name == "fetch" and "url" in args:
+        # Validate URL against SSRF / private IP traversal
+        sandbox.validate_url(args["url"])
+
     if name in LOCAL_TOOLS:
         res = LOCAL_TOOLS[name](**args)
     elif name in mcp_sessions:
@@ -304,7 +306,9 @@ async def call_tool(name: str, args: dict) -> str:
     # Enforce safety size limit to prevent small model context saturation
     if len(res) > MAX_TOOL_CHARS:
         res = res[:MAX_TOOL_CHARS] + f"\n... [truncated by harness: output exceeded {MAX_TOOL_CHARS} chars]"
-    return res
+
+    # Mask any detected secrets or credentials before returning observation
+    return Sandbox.mask_secrets(res)
 
 
 # ---------------------------------------------------------------------------
