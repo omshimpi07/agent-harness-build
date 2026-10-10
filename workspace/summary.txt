@@ -1,0 +1,18 @@
+Workplace Document Summary
+==========================
+
+From om.txt:
+- kratos
+
+From world.txt:
+- world
+
+From combined.txt:
+- kratos
+- world
+
+Combined Content:
+- kratos
+- world
+
+Total files processed: 3
