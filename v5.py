@@ -398,11 +398,31 @@ def trim_context() -> int:
         return 0
 
     system = messages[0]
-    # Keep only the tail
-    kept = messages[-(MAX_CONTEXT_MESSAGES):]
-    dropped = len(messages) - 1 - len(kept)  # -1 for system prompt
+    initial_tail = messages[-MAX_CONTEXT_MESSAGES:]
 
-    messages = [system] + kept
+    # Advance until the first message is a 'user' message
+    # This guarantees no orphan 'tool' messages or split tool-call sequences reach the API
+    start_idx = 0
+    while start_idx < len(initial_tail):
+        msg = initial_tail[start_idx]
+        role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
+        if role == "user":
+            break
+        start_idx += 1
+
+    valid_tail = initial_tail[start_idx:]
+
+    # If no user message was found in the tail, find the latest user message in history
+    if not valid_tail:
+        for i in range(len(messages) - 1, 0, -1):
+            m = messages[i]
+            r = m.get("role") if isinstance(m, dict) else getattr(m, "role", None)
+            if r == "user":
+                valid_tail = messages[i:]
+                break
+
+    dropped = len(messages) - 1 - len(valid_tail)
+    messages = [system] + valid_tail
     _last_trim_count = dropped
     return dropped
 
