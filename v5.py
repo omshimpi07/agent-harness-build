@@ -538,8 +538,8 @@ async def connect_mcp(stack: AsyncExitStack):
 
 async def call_tool(name: str, args: dict) -> str:
     """Dispatch a tool call to local Python or the owning MCP session."""
-    if name == "fetch" and "url" in args:
-        # Validate URL against SSRF / private IP traversal
+    # Validate any tool call containing a URL against SSRF / private IP traversal
+    if "url" in args and isinstance(args["url"], str):
         sandbox.validate_url(args["url"])
 
     # Human-in-the-loop approval gate for sensitive actions

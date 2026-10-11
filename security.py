@@ -103,30 +103,45 @@ class Sandbox:
         if not hostname:
             raise SecurityViolation("Invalid URL: missing hostname.")
 
-        # Block localhost strings directly
-        if hostname.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+        # Block common literal loopback/unspecified hostnames
+        if hostname.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0", "::"):
             logging.warning(f"SSRF Loopback blocked: {url}")
             raise SecurityViolation("Access to loopback interface is blocked.")
 
-        # Resolve DNS to check IP range
+        # Resolve DNS to check ALL returned IPv4 and IPv6 addresses
         try:
-            ip_str = socket.gethostbyname(hostname)
-            ip_obj = ipaddress.ip_address(ip_str)
+            addr_info = socket.getaddrinfo(hostname, None)
+        except (socket.gaierror, UnicodeError) as e:
+            logging.warning(f"SSRF DNS resolution failed (fail-closed): {url} ({e})")
+            raise SecurityViolation(f"SSRF guard: failed to resolve host '{hostname}'. Access denied.")
 
-            if (
-                ip_obj.is_loopback
-                or ip_obj.is_private
-                or ip_obj.is_link_local
-                or ip_obj.is_reserved
-            ):
-                logging.warning(f"SSRF Private IP blocked: {url} -> {ip_str}")
-                raise SecurityViolation(
-                    f"Access to private/internal network IP ({ip_str}) is forbidden."
-                )
-        except (socket.gaierror, ValueError):
-            # If DNS resolution fails, allow if not an obvious IP string,
-            # or reject if malformed
-            pass
+        if not addr_info:
+            raise SecurityViolation(f"SSRF guard: no IP addresses resolved for '{hostname}'.")
+
+        for family, socktype, proto, canonname, sockaddr in addr_info:
+            ip_str = sockaddr[0]
+            try:
+                ip_obj = ipaddress.ip_address(ip_str)
+            except ValueError:
+                raise SecurityViolation(f"SSRF guard: invalid resolved IP '{ip_str}'.")
+
+            # Check for IPv4-mapped IPv6 address (e.g. ::ffff:127.0.0.1)
+            check_ips = [ip_obj]
+            if isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj.ipv4_mapped:
+                check_ips.append(ip_obj.ipv4_mapped)
+
+            for target_ip in check_ips:
+                if (
+                    target_ip.is_loopback
+                    or target_ip.is_private
+                    or target_ip.is_link_local
+                    or target_ip.is_reserved
+                    or target_ip.is_multicast
+                ):
+                    logging.warning(f"SSRF Blocked: {url} resolved to non-public IP {target_ip}")
+                    raise SecurityViolation(
+                        f"Access to private/internal network IP ({target_ip}) is forbidden."
+                    )
 
         return url
 
