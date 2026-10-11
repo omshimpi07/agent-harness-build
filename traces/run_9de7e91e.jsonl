@@ -1,0 +1,4 @@
+{"run_id": "9de7e91e", "step": 1, "event": "run_started", "time": "18:42:18", "elapsed_ms": 1, "prompt": "What time is it right now in Tokyo? Give me the exact time.", "model": "qwen3.5:4b"}
+{"run_id": "9de7e91e", "step": 2, "event": "model_response", "time": "18:42:20", "elapsed_ms": 2205, "model_ms": 2203, "tool_calls": 1, "prompt_tokens": 1478, "completion_tokens": 66}
+{"run_id": "9de7e91e", "step": 3, "event": "tool_call", "time": "18:42:21", "elapsed_ms": 2258, "tool": "get_current_time", "args": "{'timezone': 'Asia/Tokyo'}", "status": "ok", "duration_ms": 51}
+{"run_id": "9de7e91e", "step": 4, "event": "run_ended", "time": "18:42:23", "elapsed_ms": 4988, "exit_reason": "completed", "model_ms": 2729, "verified": true, "prompt_tokens": 1622, "completion_tokens": 115}

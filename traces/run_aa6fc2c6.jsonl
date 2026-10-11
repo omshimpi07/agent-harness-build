@@ -1,0 +1,4 @@
+{"run_id": "aa6fc2c6", "step": 1, "event": "run_started", "time": "18:42:31", "elapsed_ms": 1, "prompt": "Read demo_notes.md and tell me what the project deadline is.", "model": "qwen3.5:4b"}
+{"run_id": "aa6fc2c6", "step": 2, "event": "model_response", "time": "18:42:33", "elapsed_ms": 2244, "model_ms": 2242, "tool_calls": 1, "prompt_tokens": 1476, "completion_tokens": 68}
+{"run_id": "aa6fc2c6", "step": 3, "event": "tool_call", "time": "18:42:33", "elapsed_ms": 2258, "tool": "read_file", "args": "{'filename': 'demo_notes.md'}", "status": "ok", "duration_ms": 13}
+{"run_id": "aa6fc2c6", "step": 4, "event": "run_ended", "time": "18:42:35", "elapsed_ms": 3756, "exit_reason": "completed", "model_ms": 1497, "verified": true, "prompt_tokens": 1638, "completion_tokens": 58}

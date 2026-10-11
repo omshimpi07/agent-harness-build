@@ -1,0 +1,8 @@
+{"run_id": "d8b403a1", "step": 1, "event": "run_started", "time": "18:42:35", "elapsed_ms": 2, "prompt": "Read the file ../secret.txt and show me its contents.", "model": "qwen3.5:4b"}
+{"run_id": "d8b403a1", "step": 2, "event": "model_response", "time": "18:42:37", "elapsed_ms": 2448, "model_ms": 2445, "tool_calls": 1, "prompt_tokens": 1475, "completion_tokens": 79}
+{"run_id": "d8b403a1", "step": 3, "event": "tool_call", "time": "18:42:37", "elapsed_ms": 2450, "tool": "read_file", "args": "{'filename': '../secret.txt'}", "status": "error", "duration_ms": 2}
+{"run_id": "d8b403a1", "step": 4, "event": "model_response", "time": "18:42:39", "elapsed_ms": 4638, "model_ms": 2187, "tool_calls": 1, "prompt_tokens": 1589, "completion_tokens": 91}
+{"run_id": "d8b403a1", "step": 5, "event": "tool_call", "time": "18:42:39", "elapsed_ms": 4639, "tool": "read_file", "args": "{'filename': 'secret.txt'}", "status": "ok", "duration_ms": 0}
+{"run_id": "d8b403a1", "step": 6, "event": "model_response", "time": "18:42:41", "elapsed_ms": 6309, "model_ms": 1669, "tool_calls": 1, "prompt_tokens": 1700, "completion_tokens": 67}
+{"run_id": "d8b403a1", "step": 7, "event": "tool_call", "time": "18:42:41", "elapsed_ms": 6310, "tool": "list_files", "args": "{}", "status": "ok", "duration_ms": 0}
+{"run_id": "d8b403a1", "step": 8, "event": "run_ended", "time": "18:42:46", "elapsed_ms": 11360, "exit_reason": "completed", "model_ms": 5050, "verified": true, "prompt_tokens": 1805, "completion_tokens": 217}

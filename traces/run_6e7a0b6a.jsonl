@@ -1,0 +1,4 @@
+{"run_id": "6e7a0b6a", "step": 1, "event": "run_started", "time": "18:50:37", "elapsed_ms": 1, "prompt": "Read om.txt from my workspace and tell me exactly what it says.", "model": "qwen3.5:4b"}
+{"run_id": "6e7a0b6a", "step": 2, "event": "model_response", "time": "18:50:40", "elapsed_ms": 2709, "model_ms": 2707, "tool_calls": 1, "llm_step": 1, "prompt_tokens": 1488, "completion_tokens": 88}
+{"run_id": "6e7a0b6a", "step": 3, "event": "tool_call", "time": "18:50:40", "elapsed_ms": 2712, "tool": "read_file", "args": "{'filename': 'om.txt'}", "result_preview": "kratos", "status": "ok", "duration_ms": 2, "llm_step": 1}
+{"run_id": "6e7a0b6a", "step": 4, "event": "run_ended", "time": "18:50:41", "elapsed_ms": 3762, "exit_reason": "completed", "model_ms": 1049, "verified": true, "llm_step": 2, "prompt_tokens": 1593, "completion_tokens": 41}

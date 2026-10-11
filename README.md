@@ -53,10 +53,20 @@ Developed as a progressive architectural evolution from basic LLM request/respon
 - Local Ollama running `qwen3.5:4b`
 
 ### 2. Running the Harness
+
+#### Option A: Terminal CLI
 ```powershell
-# Run the hardened V5 harness
+# Run the hardened V5 interactive CLI
 .venv\Scripts\python.exe v5.py
 ```
+
+#### Option B: Agent Operations Console (Web UI)
+```powershell
+# Launch the FastAPI observability server
+.venv\Scripts\python.exe server.py
+# Open your browser to: http://127.0.0.1:8000
+```
+*Features live execution timeline, interactive human-in-the-loop write approval cards, preset attack tests (`../secret.txt`, `SSRF`), and real-time task checklist updates.*
 
 ### 3. Interactive Slash Commands
 - `/models`: View configured local and cloud model endpoints.

@@ -10,3 +10,4 @@
 2026-10-11 18:45:03,548 [WARNING] [SECURITY_VIOLATION] SSRF Blocked: http://169.254.169.254/latest/meta-data/ resolved to non-public IP 169.254.169.254
 2026-10-11 18:45:03,548 [WARNING] [SECURITY_VIOLATION] SSRF Loopback blocked: http://127.0.0.1:8000/
 2026-10-11 18:45:03,577 [WARNING] [SECURITY_VIOLATION] SSRF DNS resolution failed (fail-closed): http://unresolvable-domain-xyz-never-exists.fake/ ([Errno 11001] getaddrinfo failed)
+{"time": "2026-10-11 18:51:02,124", "level": "WARNING", "event": "SECURITY_VIOLATION", "message": "Path traversal blocked: '../secret.txt' -> resolved as 'D:\agent-harness-build\secret.txt'"}
