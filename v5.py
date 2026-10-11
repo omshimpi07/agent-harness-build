@@ -747,11 +747,12 @@ async def run_agent(user_message: str) -> str:
 
             # ---- execute tool with timeout, isolation, and security tracking ----
             t1 = time.time()
+            effective_timeout = 120.0 if (tool_name in NEEDS_APPROVAL and APPROVE_WRITES == "ask") else TOOL_TIMEOUT
             try:
-                result = await asyncio.wait_for(call_tool(tool_name, args), timeout=TOOL_TIMEOUT)
+                result = await asyncio.wait_for(call_tool(tool_name, args), timeout=effective_timeout)
                 status = "error" if result.startswith("error:") else "ok"
             except asyncio.TimeoutError:
-                result = f"error: tool '{tool_name}' timed out after {TOOL_TIMEOUT}s"
+                result = f"error: tool '{tool_name}' timed out after {effective_timeout}s"
                 status = "error"
             except SecurityViolation as e:
                 result = f"error: security violation — {e}"

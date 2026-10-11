@@ -61,6 +61,20 @@ pending_approvals: dict[str, asyncio.Future] = {}
 # Custom WebSocket Approval Handler
 # ---------------------------------------------------------------------------
 
+async def broadcast_ws(msg: dict):
+    """Safely send a JSON message to all active WebSocket clients, pruning dead connections."""
+    dead = []
+    text = json.dumps(msg)
+    for ws in list(active_connections):
+        try:
+            await ws.send_text(text)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        if ws in active_connections:
+            active_connections.remove(ws)
+
+
 async def ws_approval_handler(tool: str, args: dict) -> bool:
     """
     Overrides v5.approval_handler: routes sensitive action approvals
@@ -83,15 +97,11 @@ async def ws_approval_handler(tool: str, args: dict) -> bool:
         "filename": args.get("filename", ""),
         "content_preview": args.get("content", "")[:300],
     }
-    for ws in active_connections:
-        try:
-            await ws.send_text(json.dumps(msg))
-        except Exception:
-            pass
+    await broadcast_ws(msg)
 
     try:
-        # Wait up to 60 seconds for human approval
-        result = await asyncio.wait_for(fut, timeout=60.0)
+        # Wait up to 120 seconds for human approval
+        result = await asyncio.wait_for(fut, timeout=120.0)
         return bool(result)
     except asyncio.TimeoutError:
         return False
@@ -279,21 +289,21 @@ async def websocket_endpoint(websocket: WebSocket):
                                         tool_args = ast.literal_eval(tool_args)
                                     except Exception:
                                         tool_args = {"raw": tool_args}
-                                await websocket.send_text(json.dumps({
+                                await broadcast_ws({
                                     "type": "tool_call",
                                     "tool": e.get("tool", "unknown"),
                                     "duration_ms": e.get("duration_ms", 0),
                                     "args": tool_args if isinstance(tool_args, dict) else {"value": str(tool_args)},
                                     "result": e.get("result_preview", ""),
-                                }))
+                                })
                             elif e.get("event") == "security_block":
                                 rule_name = "Storage Boundary" if "path" in str(e.get("rule", "")).lower() else "Egress Policy"
-                                await websocket.send_text(json.dumps({
+                                await broadcast_ws({
                                     "type": "policy_event",
                                     "rule": rule_name,
                                     "status": "BLOCKED",
                                     "target": str(e.get("detail", "")),
-                                }))
+                                })
 
                         # Format active task for UI checklist
                         updated_task = TaskManager.load_active_task()
@@ -309,18 +319,18 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         tokens = sum(e.get("prompt_tokens", 0) + e.get("completion_tokens", 0) for e in last_trace_events)
 
-                        await websocket.send_text(json.dumps({
+                        await broadcast_ws({
                             "type": "run_completed",
                             "response": response_text,
                             "tokens": tokens,
                             "trace_events": last_trace_events,
                             "task": updated_task_payload,
-                        }))
+                        })
                     except Exception as e:
-                        await websocket.send_text(json.dumps({
+                        await broadcast_ws({
                             "type": "run_error",
                             "message": str(e),
-                        }))
+                        })
 
     except WebSocketDisconnect:
         if websocket in active_connections:
