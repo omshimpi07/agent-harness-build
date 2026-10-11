@@ -35,7 +35,7 @@ from pydantic import BaseModel
 
 from security import Sandbox, SecurityViolation
 from task_manager import TaskManager
-from trace import Tracer
+from tracing import Tracer
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -52,6 +52,8 @@ MCP_CONFIG = ROOT / "mcp_servers.json"
 
 MAX_STEPS = 8  # hard ceiling — the model never decides when to stop the loop
 MAX_CONTEXT_MESSAGES = 20  # sliding window: keep system prompt + last N messages
+TOOL_TIMEOUT = 30.0  # seconds before canceling a hanging tool call
+MODEL_TIMEOUT = 120.0  # seconds before canceling a hanging LLM API call
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +168,15 @@ def read_file(filename: str) -> str:
 def write_file(filename: str, content: str) -> str:
     path = _safe_path(filename)  # ← path traversal guard
     path.write_text(content, encoding="utf-8")
-    return f"wrote {len(content)} bytes to {filename}"
+
+    # Read-back verification: confirm file exists and content matches exactly
+    if not path.is_file():
+        return f"error: verification failed — file {filename} does not exist on disk after write"
+    read_back = path.read_text(encoding="utf-8")
+    if read_back != content:
+        return f"error: verification failed — disk content mismatch for {filename}"
+
+    return f"wrote and verified {len(content)} bytes to {filename}"
 
 def get_system_info() -> str:
     """Return OS platform, CPU architecture, and Python version."""
@@ -397,6 +407,21 @@ def reset_conversation():
     ]
 
 
+def serialize_messages() -> list[dict]:
+    """Serialize SDK message objects and dicts to plain JSON-serializable dictionaries."""
+    out = []
+    for m in messages:
+        if isinstance(m, dict):
+            out.append(m)
+        elif hasattr(m, "model_dump"):
+            out.append(m.model_dump())
+        elif hasattr(m, "__dict__"):
+            out.append(dict(m.__dict__))
+        else:
+            out.append({"role": getattr(m, "role", "unknown"), "content": str(getattr(m, "content", ""))})
+    return out
+
+
 # Initialize on import
 reset_conversation()
 
@@ -622,7 +647,7 @@ async def run_agent(user_message: str) -> str:
     """
     tracer = Tracer()
     cfg = MODELS[model_name]
-    client = AsyncOpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
+    client = AsyncOpenAI(base_url=cfg.base_url, api_key=cfg.api_key, timeout=MODEL_TIMEOUT)
 
     messages.append({"role": "user", "content": user_message})
     tracer.log("run_started", prompt=user_message[:200], model=cfg.model)
@@ -633,7 +658,7 @@ async def run_agent(user_message: str) -> str:
         steps += 1
         if steps > MAX_STEPS:
             msg = f"[harness] Stopped: step limit reached ({MAX_STEPS} steps)."
-            tracer.log("run_ended", exit_reason="max_steps_exceeded", steps=steps - 1)
+            tracer.log("run_ended", exit_reason="max_steps_exceeded", llm_step=steps - 1)
             print(tracer.summary())
             messages.append({"role": "assistant", "content": msg})
             return msg
@@ -641,7 +666,7 @@ async def run_agent(user_message: str) -> str:
         # ---- context trimming (sliding window) ----
         trimmed = trim_context()
         if trimmed:
-            tracer.log("context_trimmed", dropped=trimmed, remaining=len(messages))
+            tracer.log("context_trimmed", dropped=trimmed, remaining=len(messages), llm_step=steps)
 
         # ---- ask the model ----
         t0 = time.time()
@@ -651,7 +676,7 @@ async def run_agent(user_message: str) -> str:
             )
         except Exception as e:
             error_msg = f"[harness] Model error: {type(e).__name__}: {e}"
-            tracer.log("run_ended", exit_reason="model_error", error=str(e))
+            tracer.log("run_ended", exit_reason="model_error", error=str(e), llm_step=steps)
             print(tracer.summary())
             messages.append({"role": "assistant", "content": error_msg})
             return error_msg
@@ -674,13 +699,14 @@ async def run_agent(user_message: str) -> str:
             raw_content = message.content or ""
             verified_content, v_warnings = verify_output(raw_content)
             if v_warnings:
-                tracer.log("verification_warning", warnings=v_warnings)
+                tracer.log("verification_warning", warnings=v_warnings, llm_step=steps)
 
             tracer.log(
                 "run_ended",
                 exit_reason="completed",
                 model_ms=model_ms,
                 verified=len(v_warnings) == 0,
+                llm_step=steps,
                 **usage,
             )
             print(tracer.summary())
@@ -692,6 +718,7 @@ async def run_agent(user_message: str) -> str:
             "model_response",
             model_ms=model_ms,
             tool_calls=len(message.tool_calls),
+            llm_step=steps,
             **usage,
         )
 
@@ -709,6 +736,7 @@ async def run_agent(user_message: str) -> str:
                     tool=tool_name,
                     status="error",
                     error="json_parse_failed",
+                    llm_step=steps,
                 )
                 messages.append(
                     {"role": "tool", "tool_call_id": call.id, "content": result}
@@ -717,11 +745,30 @@ async def run_agent(user_message: str) -> str:
 
             print(f"  [tool] {tool_name}({args})")
 
-            # ---- execute tool with error isolation ----
+            # ---- execute tool with timeout, isolation, and security tracking ----
             t1 = time.time()
             try:
-                result = await call_tool(tool_name, args)
-                status = "ok"
+                result = await asyncio.wait_for(call_tool(tool_name, args), timeout=TOOL_TIMEOUT)
+                status = "error" if result.startswith("error:") else "ok"
+            except asyncio.TimeoutError:
+                result = f"error: tool '{tool_name}' timed out after {TOOL_TIMEOUT}s"
+                status = "error"
+            except SecurityViolation as e:
+                result = f"error: security violation — {e}"
+                status = "error"
+                rule_name = (
+                    "path_traversal"
+                    if "workspace" in str(e).lower()
+                    else ("ssrf" if "private" in str(e).lower() or "host" in str(e).lower() or "loopback" in str(e).lower() else "security_violation")
+                )
+                tracer.log(
+                    "security_block",
+                    tool=tool_name,
+                    rule=rule_name,
+                    detail=str(args)[:100],
+                    error=str(e),
+                    llm_step=steps,
+                )
             except Exception as e:
                 result = f"error: tool failed — {type(e).__name__}: {e}"
                 status = "error"
@@ -732,8 +779,10 @@ async def run_agent(user_message: str) -> str:
                 "tool_call",
                 tool=tool_name,
                 args=str(args)[:100],
+                result_preview=result[:200],
                 status=status,
                 duration_ms=tool_ms,
+                llm_step=steps,
             )
 
             messages.append(
@@ -788,6 +837,8 @@ def handle_command(line: str) -> bool:
                     parts = [f"[{event['event']}]"]
                     if "tool" in event:
                         parts.append(f"tool={event['tool']}")
+                    if "rule" in event:
+                        parts.append(f"rule={event['rule']}")
                     if "status" in event:
                         parts.append(f"status={event['status']}")
                     if "duration_ms" in event:
