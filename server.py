@@ -290,76 +290,80 @@ async def websocket_endpoint(websocket: WebSocket):
                     }))
                     continue
 
-                async with agent_lock:
-                    await websocket.send_text(json.dumps({
-                        "type": "run_started",
-                        "prompt": prompt,
-                    }))
-
-                    # Run agent loop
-                    try:
-                        response_text = await v5.run_agent(prompt)
-                        # Read the latest trace for this run
-                        trace_dir = ROOT / "traces"
-                        latest_traces = sorted(trace_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
-                        last_trace_events = []
-                        if latest_traces:
-                            last_trace_events = [
-                                json.loads(l) for l in latest_traces[-1].read_text(encoding="utf-8").strip().split("\n") if l
-                            ]
-
-                        # Stream individual tool calls and security events to UI
-                        for e in last_trace_events:
-                            if e.get("event") == "tool_call":
-                                tool_args = e.get("args", {})
-                                if isinstance(tool_args, str):
-                                    try:
-                                        import ast
-                                        tool_args = ast.literal_eval(tool_args)
-                                    except Exception:
-                                        tool_args = {"raw": tool_args}
-                                await broadcast_ws({
-                                    "type": "tool_call",
-                                    "tool": e.get("tool", "unknown"),
-                                    "duration_ms": e.get("duration_ms", 0),
-                                    "args": tool_args if isinstance(tool_args, dict) else {"value": str(tool_args)},
-                                    "result": e.get("result_preview", ""),
-                                })
-                            elif e.get("event") == "security_block":
-                                rule_name = "Storage Boundary" if "path" in str(e.get("rule", "")).lower() else "Egress Policy"
-                                await broadcast_ws({
-                                    "type": "policy_event",
-                                    "rule": rule_name,
-                                    "status": "BLOCKED",
-                                    "target": str(e.get("detail", "")),
-                                })
-
-                        # Format active task for UI checklist
-                        updated_task = TaskManager.load_active_task()
-                        updated_task_payload = None
-                        if updated_task:
-                            updated_task_payload = {
-                                "goal": updated_task.get("goal", ""),
-                                "subtasks": [
-                                    {"id": str(s.get("id")), "label": s.get("description", ""), "done": s.get("status") == "completed"}
-                                    for s in updated_task.get("subtasks", [])
-                                ],
-                            }
-
-                        tokens = sum(e.get("prompt_tokens", 0) + e.get("completion_tokens", 0) for e in last_trace_events)
-
+                # Run the agent in an asynchronous task so this WebSocket connection loop
+                # is never blocked from reading incoming 'approval_response' messages!
+                async def _execute_agent_task(user_prompt: str):
+                    async with agent_lock:
                         await broadcast_ws({
-                            "type": "run_completed",
-                            "response": response_text,
-                            "tokens": tokens,
-                            "trace_events": last_trace_events,
-                            "task": updated_task_payload,
+                            "type": "run_started",
+                            "prompt": user_prompt,
                         })
-                    except Exception as e:
-                        await broadcast_ws({
-                            "type": "run_error",
-                            "message": str(e),
-                        })
+
+                        try:
+                            response_text = await v5.run_agent(user_prompt)
+                            # Read the latest trace for this run
+                            trace_dir = ROOT / "traces"
+                            latest_traces = sorted(trace_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
+                            last_trace_events = []
+                            if latest_traces:
+                                last_trace_events = [
+                                    json.loads(l) for l in latest_traces[-1].read_text(encoding="utf-8").strip().split("\n") if l
+                                ]
+
+                            # Stream individual tool calls and security events to UI
+                            for e in last_trace_events:
+                                if e.get("event") == "tool_call":
+                                    tool_args = e.get("args", {})
+                                    if isinstance(tool_args, str):
+                                        try:
+                                            import ast
+                                            tool_args = ast.literal_eval(tool_args)
+                                        except Exception:
+                                            tool_args = {"raw": tool_args}
+                                    await broadcast_ws({
+                                        "type": "tool_call",
+                                        "tool": e.get("tool", "unknown"),
+                                        "duration_ms": e.get("duration_ms", 0),
+                                        "args": tool_args if isinstance(tool_args, dict) else {"value": str(tool_args)},
+                                        "result": e.get("result_preview", ""),
+                                    })
+                                elif e.get("event") == "security_block":
+                                    rule_name = "Storage Boundary" if "path" in str(e.get("rule", "")).lower() else "Egress Policy"
+                                    await broadcast_ws({
+                                        "type": "policy_event",
+                                        "rule": rule_name,
+                                        "status": "BLOCKED",
+                                        "target": str(e.get("detail", "")),
+                                    })
+
+                            # Format active task for UI checklist
+                            updated_task = TaskManager.load_active_task()
+                            updated_task_payload = None
+                            if updated_task:
+                                updated_task_payload = {
+                                    "goal": updated_task.get("goal", ""),
+                                    "subtasks": [
+                                        {"id": str(s.get("id")), "label": s.get("description", ""), "done": s.get("status") == "completed"}
+                                        for s in updated_task.get("subtasks", [])
+                                    ],
+                                }
+
+                            tokens = sum(e.get("prompt_tokens", 0) + e.get("completion_tokens", 0) for e in last_trace_events)
+
+                            await broadcast_ws({
+                                "type": "run_completed",
+                                "response": response_text,
+                                "tokens": tokens,
+                                "trace_events": last_trace_events,
+                                "task": updated_task_payload,
+                            })
+                        except Exception as e:
+                            await broadcast_ws({
+                                "type": "run_error",
+                                "message": str(e),
+                            })
+
+                asyncio.create_task(_execute_agent_task(prompt))
 
     except (WebSocketDisconnect, Exception):
         pass
