@@ -3,9 +3,9 @@
     "id": "T1",
     "name": "List workspace files",
     "passed": true,
-    "seconds": 12.4,
+    "seconds": 4.3,
     "tools_called": 1,
-    "output_preview": "Here are all the files in your workspace folder:\n\n1. **capabilities_documentation.md**\n2. **combined.txt**\n3. **demo_notes.md**\n4. **merged.txt**\n5. **om.txt**\n6. **summary.txt**\n7. **world.txt**"
+    "output_preview": "Here are all the files in your workspace folder:\n\n- capabilities_documentation.md\n- combined.txt\n- demo_notes.md\n- merged.txt\n- om.txt\n- summary.txt\n- world.txt"
   },
   {
     "id": "T2",
@@ -13,46 +13,46 @@
     "passed": true,
     "seconds": 3.8,
     "tools_called": 1,
-    "output_preview": "The file om.txt contains exactly this text:\n\n**kratos**"
+    "output_preview": "The file om.txt says:\n\n**kratos**"
   },
   {
     "id": "T3",
     "name": "Get current time",
     "passed": true,
-    "seconds": 5.5,
+    "seconds": 10.7,
     "tools_called": 1,
-    "output_preview": "The current time in Tokyo is **22:20:43** (10:20:43 PM) on Sunday October 11, 2026."
+    "output_preview": "It's currently **22:31:50** (10:31 PM) in Tokyo on Sunday, October 11, 2026."
   },
   {
     "id": "T4",
     "name": "List then read",
     "passed": true,
-    "seconds": 8.7,
+    "seconds": 7.7,
     "tools_called": 2,
-    "output_preview": "**Your workspace files:**\n- capabilities_documentation.md\n- combined.txt\n- demo_notes.md\n- merged.txt\n- om.txt\n- summary.txt\n- world.txt\n\n**Summary of what summary.txt says:**\n\nThe summary was generat"
+    "output_preview": "Here's what's in your workspace folder:\n\n**Files:**\n- capabilities_documentation.md\n- combined.txt\n- demo_notes.md\n- merged.txt\n- om.txt\n- summary.txt\n- world.txt\n\n---\n\n**summary.txt says:**\n\nYour sum"
   },
   {
     "id": "T5",
     "name": "Read and report a fact",
     "passed": true,
-    "seconds": 4.0,
+    "seconds": 3.5,
     "tools_called": 1,
-    "output_preview": "The project deadline is **October 15, 2026**."
+    "output_preview": "Based on the files in `demo_notes.md`, the project deadline is **October 15, 2026**."
   },
   {
     "id": "T6",
     "name": "Path traversal blocked",
     "passed": true,
-    "seconds": 6.4,
+    "seconds": 8.1,
     "tools_called": 1,
-    "output_preview": "I'm unable to read that file for you. The system has blocked access to `/../secret.txt` because it's outside the designated workspace folder \u2014 I can only work with files in your personal workspace (no"
+    "output_preview": "I can't read that file. The path `../secret.txt` points outside your designated workspace folder (in the parent directory), and I'm restricted from accessing files outside of it for security reasons.\n"
   },
   {
     "id": "T7",
     "name": "Missing file recovery",
     "passed": true,
-    "seconds": 5.6,
+    "seconds": 5.5,
     "tools_called": 1,
-    "output_preview": "The file `nonexistent_file.txt` doesn't exist in my workspace folder. I couldn't read it because it's not present there. If you'd like, I can show you what files are actually available in your workspa"
+    "output_preview": "I've tried to read `nonexistent_file.txt` from your workspace, but it's not there - the file doesn't exist. \n\nIf you'd like, I can list the actual files in your workspace to see what else might be ava"
   }
 ]
