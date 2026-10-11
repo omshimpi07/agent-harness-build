@@ -11,11 +11,7 @@ import {
   nowTs,
   uid,
 } from "@/lib/harness-types";
-import {
-  DEFAULT_TASK,
-  DIAGNOSTIC_PROMPTS,
-  type Diagnostic,
-} from "@/lib/harness-sim";
+import { DEFAULT_TASK, DIAGNOSTIC_PROMPTS, type Diagnostic } from "@/lib/harness-sim";
 
 const WS_URL =
   typeof window !== "undefined"
@@ -52,12 +48,14 @@ export function useHarness() {
     ]);
 
     switch (msg.type) {
-      case "init":
+      case "init": {
         if (msg.tools) setToolsAvailable(msg.tools);
         if (msg.tools_list) setToolsList(msg.tools_list);
-        if (msg.max_steps) setTelemetry((t) => ({ ...t, maxSteps: msg.max_steps! }));
+        const maxSteps = msg.max_steps;
+        if (maxSteps) setTelemetry((t) => ({ ...t, maxSteps }));
         if (msg.task) setTask(msg.task);
         break;
+      }
 
       case "run_started":
         setTelemetry((t) => ({ ...t, steps: 0, toolCount: 0, status: "RUNNING" }));
@@ -67,7 +65,12 @@ export function useHarness() {
         setChat((c) => {
           // Prevent exact duplicate tool calls within the same second
           const last = c[c.length - 1];
-          if (last && last.kind === "tool" && last.tool === msg.tool && JSON.stringify(last.args) === JSON.stringify(msg.args ?? {})) {
+          if (
+            last &&
+            last.kind === "tool" &&
+            last.tool === msg.tool &&
+            JSON.stringify(last.args) === JSON.stringify(msg.args ?? {})
+          ) {
             return c;
           }
           return [
@@ -98,10 +101,10 @@ export function useHarness() {
               msg.status === "PENDING"
                 ? "WARN"
                 : msg.status === "ALLOWED"
-                ? "INFO"
-                : msg.rule === "Egress Policy"
-                ? "HIGH"
-                : "CRITICAL",
+                  ? "INFO"
+                  : msg.rule === "Egress Policy"
+                    ? "HIGH"
+                    : "CRITICAL",
             rule: msg.rule,
             status: msg.status,
             target: msg.target,
@@ -115,7 +118,7 @@ export function useHarness() {
         setTask((tk) => ({
           ...tk,
           subtasks: tk.subtasks.map((s) =>
-            s.id === msg.subtask_id ? { ...s, done: msg.done } : s
+            s.id === msg.subtask_id ? { ...s, done: msg.done } : s,
           ),
         }));
         break;
@@ -130,18 +133,16 @@ export function useHarness() {
         setTelemetry((t) => ({ ...t, status: "AWAITING APPROVAL" }));
         break;
 
-      case "run_completed":
-        if (msg.response) {
+      case "run_completed": {
+        const response = msg.response;
+        if (response) {
           setChat((c) => {
             // Deduplicate if identical response was already appended as the last message
             const last = c[c.length - 1];
             if (last && last.kind === "assistant" && last.text === msg.response) {
               return c;
             }
-            return [
-              ...c,
-              { kind: "assistant", id: uid(), text: msg.response!, ts, tokens: msg.tokens },
-            ];
+            return [...c, { kind: "assistant", id: uid(), text: response, ts, tokens: msg.tokens }];
           });
         }
         setTelemetry((t) => ({
@@ -151,6 +152,7 @@ export function useHarness() {
           status: "COMPLETE",
         }));
         break;
+      }
 
       case "run_error":
         setChat((c) => [...c, { kind: "error", id: uid(), text: msg.message ?? "Run failed", ts }]);
@@ -160,7 +162,11 @@ export function useHarness() {
   }, []);
 
   const connect = useCallback(() => {
-    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+    if (
+      wsRef.current &&
+      (wsRef.current.readyState === WebSocket.OPEN ||
+        wsRef.current.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
 
@@ -224,17 +230,20 @@ export function useHarness() {
     };
   }, [connect]);
 
-  const sendPayload = useCallback((payload: Record<string, unknown>) => {
-    const jsonStr = JSON.stringify(payload);
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(jsonStr);
-    } else {
-      console.log("[Harness Console] WebSocket connecting, queueing payload:", payload);
-      pendingQueue.current.push(jsonStr);
-      connect();
-    }
-  }, [connect]);
+  const sendPayload = useCallback(
+    (payload: Record<string, unknown>) => {
+      const jsonStr = JSON.stringify(payload);
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(jsonStr);
+      } else {
+        console.log("[Harness Console] WebSocket connecting, queueing payload:", payload);
+        pendingQueue.current.push(jsonStr);
+        connect();
+      }
+    },
+    [connect],
+  );
 
   const run = useCallback(
     (prompt: string, diag?: Diagnostic) => {
@@ -243,13 +252,10 @@ export function useHarness() {
       setTelemetry((t) => ({ ...t, status: "RUNNING" }));
       sendPayload({ type: "run", prompt, diagnostic: diag });
     },
-    [sendPayload]
+    [sendPayload],
   );
 
-  const runDiagnostic = useCallback(
-    (d: Diagnostic) => run(DIAGNOSTIC_PROMPTS[d], d),
-    [run]
-  );
+  const runDiagnostic = useCallback((d: Diagnostic) => run(DIAGNOSTIC_PROMPTS[d], d), [run]);
 
   const respondApproval = useCallback(
     (approved: boolean) => {
@@ -260,7 +266,7 @@ export function useHarness() {
       setTelemetry((t) => ({ ...t, status: "RUNNING" }));
       setApproval(null);
     },
-    [approval, sendPayload]
+    [approval, sendPayload],
   );
 
   const setModel = useCallback(async (m: ModelKey) => {

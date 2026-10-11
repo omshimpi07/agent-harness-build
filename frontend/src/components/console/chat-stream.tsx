@@ -1,80 +1,146 @@
-import { useState } from "react";
-import { AlertOctagon, Bot, ChevronRight, User, Wrench } from "lucide-react";
-import type { ChatEntry } from "@/lib/harness-types";
+import { AlertOctagon, FilePenLine, FileText, ShieldAlert, User } from "lucide-react";
+import type { ApprovalRequest, ChatEntry } from "@/lib/harness-types";
+import { toolPresentation } from "@/lib/console-presentation";
+import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+} from "@/components/ai-elements/tool";
+import { Badge, CopyButton, JsonBlock } from "./primitives";
 import { cn } from "@/lib/utils";
-import { Badge, CopyButton, JsonBlock, Markdown } from "./primitives";
-
-function preview(v: unknown) {
-  const s = JSON.stringify(v) ?? "";
-  return s.length > 72 ? s.slice(0, 72) + "…" : s;
-}
-
+const tones = {
+  danger: "border-destructive/25 bg-destructive/10 text-destructive",
+  warn: "border-warning/25 bg-warning/10 text-warning",
+  cyan: "border-cyan/25 bg-cyan/10 text-cyan",
+};
 export function ChatCard({ entry }: { entry: ChatEntry }) {
-  const [open, setOpen] = useState(false);
-  const base = "animate-in fade-in slide-in-from-bottom-1 duration-300";
-
-  if (entry.kind === "user")
+  if (entry.kind === "tool") {
+    const status = toolPresentation(entry);
+    const Icon = status.blocked ? ShieldAlert : status.write ? FilePenLine : FileText;
     return (
-      <div className={cn("flex gap-3", base)}>
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-info/15 text-info ring-1 ring-info/30"><User className="h-3.5 w-3.5" /></div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[12.5px] font-semibold">Operator</span>
-            <span className="font-mono text-[10.5px] text-muted-foreground">{entry.ts}</span>
-          </div>
-          <p className="mt-1 text-[13.5px] leading-relaxed text-foreground/90">{entry.text}</p>
-        </div>
-      </div>
-    );
-
-  if (entry.kind === "assistant" || entry.kind === "error") {
-    const err = entry.kind === "error";
-    return (
-      <div className={cn("flex gap-3", base)}>
-        <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1", err ? "bg-destructive/15 text-destructive ring-destructive/30" : "bg-primary/15 text-primary ring-primary/30")}>
-          {err ? <AlertOctagon className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
-        </div>
-        <div className="group min-w-0 flex-1 rounded-lg border border-border bg-card p-3.5 shadow-card">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-[12.5px] font-semibold">{err ? "Run error" : "Harness Agent"}</span>
-            <span className="font-mono text-[10.5px] text-muted-foreground">{entry.ts}</span>
-            <div className="ml-auto flex items-center gap-1.5">
-              {entry.kind === "assistant" && entry.tokens != null && <Badge mono>{entry.tokens.toLocaleString()} tok</Badge>}
-              <CopyButton text={entry.text} className="opacity-60 group-hover:opacity-100" />
-            </div>
-          </div>
-          <Markdown text={entry.text} />
-        </div>
-      </div>
+      <Message from="assistant" className="ml-0 max-w-full pl-0 sm:pl-10">
+        <MessageContent className="w-full">
+          <Tool
+            defaultOpen={false}
+            className="mb-0 overflow-hidden border-border-subtle bg-surface/80 hover:border-border"
+          >
+            <ToolHeader
+              type="dynamic-tool"
+              toolName={entry.tool}
+              state={status.state}
+              statusLabel={status.label}
+              statusClassName={tones[status.tone]}
+              icon={
+                <Icon
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    status.tone === "danger"
+                      ? "text-destructive"
+                      : status.tone === "warn"
+                        ? "text-warning"
+                        : "text-cyan",
+                  )}
+                />
+              }
+              meta={
+                <Badge tone={status.tone} mono>
+                  {entry.durationMs}ms
+                </Badge>
+              }
+              className="px-3 py-2.5"
+            />
+            <ToolContent className="space-y-3 border-t border-border-subtle bg-background/40 p-3">
+              <ToolInput input={entry.args} />
+              <ToolOutput output={<JsonBlock value={entry.result} />} errorText={undefined} />
+            </ToolContent>
+          </Tool>
+        </MessageContent>
+      </Message>
     );
   }
-
-  const [ns, method] = entry.tool.includes(".") ? entry.tool.split(".") : ["tool", entry.tool];
-  const failed = typeof entry.result === "object" && entry.result !== null && "error" in entry.result;
+  const user = entry.kind === "user";
+  const error = entry.kind === "error";
   return (
-    <div className={cn("ml-10", base)}>
-      <div className={cn("overflow-hidden rounded-lg border bg-surface transition-colors", open ? "border-border" : "border-border/70 hover:border-border")}>
-        <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-2.5 px-3 py-2 text-left">
-          <ChevronRight className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
-          <Wrench className="h-3.5 w-3.5 text-warning" />
-          <span className="font-mono text-[12px]"><span className="text-muted-foreground">{ns}.</span><span className="text-foreground">{method}</span></span>
-          <Badge tone={failed ? "danger" : "ok"}>{failed ? "denied" : "ok"}</Badge>
-          <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground sm:block">{preview(entry.result)}</span>
-          <Badge tone="warn" mono className="ml-auto">{entry.durationMs}ms</Badge>
-        </button>
-        {open && (
-          <div className="grid gap-3 border-t border-border/70 p-3 animate-in fade-in">
-            <div>
-              <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Arguments</div>
-              <JsonBlock value={entry.args} />
-            </div>
-            <div>
-              <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Output</div>
-              <JsonBlock value={entry.result} />
+    <Message from={user ? "user" : "assistant"} className="ml-0 max-w-full">
+      <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+            user
+              ? "border-info/20 bg-info/10 text-info"
+              : error
+                ? "border-destructive/20 bg-destructive/10 text-destructive"
+                : "border-primary/20 bg-primary/5",
+          )}
+        >
+          {user ? (
+            <User size={14} />
+          ) : error ? (
+            <AlertOctagon size={14} />
+          ) : (
+            <img src="/favicon.svg" width={24} height={24} alt="Aegis Sentinel" />
+          )}
+        </div>
+        <MessageContent
+          className={cn(
+            "w-full",
+            user
+              ? "group-[.is-user]:ml-0 group-[.is-user]:border group-[.is-user]:border-border group-[.is-user]:bg-chat-user group-[.is-user]:text-chat-user-foreground group-[.is-user]:px-4 group-[.is-user]:py-3"
+              : "py-1",
+          )}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold">
+              {user ? "Operator" : error ? "Execution error" : "Sentinel Agent"}
+            </span>
+            {!user && !error && <span className="text-[9px] text-primary">AEGIS RUNTIME</span>}
+            <time className="font-mono text-[10px] text-muted-foreground">{entry.ts}</time>
+            <div className="ml-auto flex items-center gap-2">
+              {entry.kind === "assistant" && entry.tokens !== undefined && (
+                <Badge mono tone="cyan">
+                  {entry.tokens.toLocaleString()} tokens
+                </Badge>
+              )}
+              <CopyButton text={entry.text} />
             </div>
           </div>
-        )}
+          {user ? (
+            <p className="whitespace-pre-wrap break-words text-[13px] leading-6">{entry.text}</p>
+          ) : (
+            <MessageResponse
+              mode="static"
+              className={cn("console-markdown", error && "text-destructive")}
+            >
+              {entry.text}
+            </MessageResponse>
+          )}
+        </MessageContent>
       </div>
-    </div>
+    </Message>
+  );
+}
+export function PendingApprovalTool({ req }: { req: ApprovalRequest }) {
+  return (
+    <Message from="assistant" className="max-w-full sm:pl-10">
+      <MessageContent className="w-full">
+        <Tool defaultOpen={false} className="mb-0 border-warning/25 bg-warning/5">
+          <ToolHeader
+            type="dynamic-tool"
+            toolName={req.tool}
+            state="approval-requested"
+            statusLabel="Requires Approval"
+            statusClassName={tones.warn}
+            icon={<FilePenLine size={14} className="text-warning" />}
+          />
+          <ToolContent>
+            <ToolInput input={{ filename: req.filename }} />
+            <ToolOutput output={<JsonBlock value={req.content_preview} />} errorText={undefined} />
+          </ToolContent>
+        </Tool>
+      </MessageContent>
+    </Message>
   );
 }

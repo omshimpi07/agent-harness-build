@@ -14,4 +14,12 @@ describe("App routing", () => {
 
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
+
+  it("opens /console directly without an authentication route or guard", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+    const matches = router.matchRoutes("/console");
+    expect(matches.at(-1)?.routeId).toBe("/console");
+    expect(matches.map(match => match.routeId)).toEqual([rootRouteId, "/console"]);
+    expect(router.routesById["/console"].options.beforeLoad).toBeUndefined();
+  });
 });
