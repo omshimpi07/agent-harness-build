@@ -34,6 +34,15 @@ Developed as a progressive architectural evolution from basic LLM request/respon
    - External fetch or read outputs exceeding 4000 characters are safely truncated to protect small model context windows.
 5. **Tool Error Isolation**:
    - Individual tool exceptions (e.g., missing files, network drops) are intercepted and formatted as standard observations instead of crashing the runtime.
+6. **Context Trimming (Sliding Window)**:
+   - Before every model call, the harness enforces a message-count sliding window (`MAX_CONTEXT_MESSAGES = 20`).
+   - Preserves the system prompt and drops oldest turns via FIFO eviction, preventing context overflow on small models.
+7. **Output Verification (Post-Check)**:
+   - Before returning a response to the user, the harness runs a 4-point verification pass:
+     - System prompt leak detection (catches verbatim fragments)
+     - Hallucinated tool reference detection
+     - Raw JSON bleed recovery (extracts content from leaked message objects)
+     - Defense-in-depth secret re-masking on generated output
 
 ---
 

@@ -50,6 +50,7 @@ MCP_CONFIG = ROOT / "mcp_servers.json"
 # ---------------------------------------------------------------------------
 
 MAX_STEPS = 8  # hard ceiling — the model never decides when to stop the loop
+MAX_CONTEXT_MESSAGES = 20  # sliding window: keep system prompt + last N messages
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +156,8 @@ def write_file(filename: str, content: str) -> str:
         if approval != "y":
             return "error: write denied by user"
     # If APPROVE_WRITES == "auto", proceed without prompting
+    path.write_text(content, encoding="utf-8")
+    return f"wrote {len(content)} bytes to {filename}"
 
 def get_system_info() -> str:
     """Return OS platform, CPU architecture, and Python version."""
@@ -352,6 +355,118 @@ def reset_conversation():
 # Initialize on import
 reset_conversation()
 
+# Track trimming stats for /context command
+_last_trim_count = 0
+
+
+# ---------------------------------------------------------------------------
+# Context Trimming — Sliding Window
+# ---------------------------------------------------------------------------
+
+def trim_context() -> int:
+    """
+    Enforce a sliding window on the conversation history.
+
+    Keeps:
+      - messages[0] (system prompt) — ALWAYS preserved
+      - The most recent MAX_CONTEXT_MESSAGES messages
+
+    Drops:
+      - Oldest user/assistant/tool turns between the system prompt
+        and the retention window (FIFO eviction)
+
+    Returns the number of messages dropped.
+
+    Why message-count instead of token-count:
+      - Deterministic and model-agnostic (no tiktoken dependency)
+      - Good enough for a 4B model with ~4K context
+      - In production you'd count tokens; this is the right abstraction
+    """
+    global messages, _last_trim_count
+
+    # +1 because messages[0] is system prompt, we keep it separately
+    if len(messages) <= MAX_CONTEXT_MESSAGES + 1:
+        _last_trim_count = 0
+        return 0
+
+    system = messages[0]
+    # Keep only the tail
+    kept = messages[-(MAX_CONTEXT_MESSAGES):]
+    dropped = len(messages) - 1 - len(kept)  # -1 for system prompt
+
+    messages = [system] + kept
+    _last_trim_count = dropped
+    return dropped
+
+
+# ---------------------------------------------------------------------------
+# Output Verification — Defense-in-Depth Post-Check
+# ---------------------------------------------------------------------------
+
+# Fragments of the system prompt that should never appear in output
+_SYSTEM_FRAGMENTS = [
+    "running inside a custom harness",
+    "save_memory",
+    "You are a helpful personal assistant",
+    "workspace folder holds their personal files",
+]
+
+
+def verify_output(text: str) -> tuple[str, list[str]]:
+    """
+    Run post-generation checks on the model's final response.
+
+    Checks:
+      1. System prompt leak — verbatim fragments of our system prompt
+      2. Hallucinated tools — references to tool names that don't exist
+      3. Raw JSON bleed — response looks like raw message JSON
+      4. Secret re-masking — catch any credential patterns the model generated
+
+    Returns:
+      (cleaned_text, list_of_warnings)
+
+    Design choice: we CLEAN and FLAG, we don't BLOCK.
+    Blocking would frustrate users; cleaning + tracing lets you audit.
+    """
+    warnings = []
+
+    # 1. System prompt leak detection
+    text_lower = text.lower()
+    for fragment in _SYSTEM_FRAGMENTS:
+        if fragment.lower() in text_lower:
+            warnings.append(f"system_prompt_leak: '{fragment[:30]}...'")
+            # Don't remove it — just flag. The model may legitimately reference
+            # its capabilities. Logging is the important part.
+
+    # 2. Hallucinated tool references
+    # Check if the model claims to have called a tool that doesn't exist
+    known_tools = set(LOCAL_TOOLS.keys()) | set(mcp_sessions.keys())
+    # Common patterns: "I used the X tool", "calling X", "tool X"
+    import re as _re
+    tool_mentions = _re.findall(r'\b(?:called?|us(?:ed?|ing)|invok(?:ed?|ing))\s+(?:the\s+)?(\w+)\s+tool', text_lower)
+    for mention in tool_mentions:
+        if mention not in known_tools and mention not in ("the", "a", "my", "this"):
+            warnings.append(f"hallucinated_tool: '{mention}'")
+
+    # 3. Raw JSON bleed detection
+    # If the response starts with {"role": or [{"role":, the model leaked internal message format
+    stripped = text.strip()
+    if stripped.startswith('{\"role\"') or stripped.startswith('[{\"role\"'):
+        warnings.append("json_bleed: response contains raw message JSON")
+        # Try to extract just the content field if possible
+        try:
+            parsed = json.loads(stripped)
+            if isinstance(parsed, dict) and "content" in parsed:
+                text = parsed["content"]
+                warnings.append("json_bleed_recovered: extracted content field")
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # 4. Secret re-masking on final output (defense-in-depth)
+    text = Sandbox.mask_secrets(text)
+
+    return text, warnings
+
 
 # ---------------------------------------------------------------------------
 # MCP — discover and call external tool servers
@@ -449,6 +564,11 @@ async def run_agent(user_message: str) -> str:
             messages.append({"role": "assistant", "content": msg})
             return msg
 
+        # ---- context trimming (sliding window) ----
+        trimmed = trim_context()
+        if trimmed:
+            tracer.log("context_trimmed", dropped=trimmed, remaining=len(messages))
+
         # ---- ask the model ----
         t0 = time.time()
         try:
@@ -476,15 +596,22 @@ async def run_agent(user_message: str) -> str:
 
         # ---- final response (no tool calls) ----
         if not message.tool_calls:
+            # ---- output verification (defense-in-depth) ----
+            raw_content = message.content or ""
+            verified_content, v_warnings = verify_output(raw_content)
+            if v_warnings:
+                tracer.log("verification_warning", warnings=v_warnings)
+
             tracer.log(
                 "run_ended",
                 exit_reason="completed",
                 model_ms=model_ms,
+                verified=len(v_warnings) == 0,
                 **usage,
             )
             print(tracer.summary())
-            messages.append({"role": "assistant", "content": message.content})
-            return message.content or ""
+            messages.append({"role": "assistant", "content": verified_content})
+            return verified_content
 
         # ---- tool calls requested ----
         tracer.log(
@@ -602,11 +729,21 @@ def handle_command(line: str) -> bool:
     elif cmd == "/tasks":
         print(get_task_status())
 
+    elif cmd == "/context":
+        total = len(messages)
+        system_len = len(messages[0]["content"]) if messages else 0
+        print(f"  messages in context: {total} (limit: {MAX_CONTEXT_MESSAGES + 1})")
+        print(f"  system prompt size : {system_len} chars")
+        if _last_trim_count:
+            print(f"  last trim dropped  : {_last_trim_count} messages")
+        else:
+            print(f"  last trim dropped  : 0 (within window)")
+
     elif cmd == "/quit":
         raise SystemExit
 
     else:
-        print("  commands: /models /model <name> /tools /memory /trace /tasks /quit")
+        print("  commands: /models /model <name> /tools /memory /trace /tasks /context /quit")
 
     return True
 
@@ -628,6 +765,7 @@ async def main():
             f"\n  tools : {len(TOOL_SCHEMAS)} ({len(LOCAL_TOOLS)} local + "
             f"{len(TOOL_SCHEMAS) - len(LOCAL_TOOLS)} mcp)"
             f"\n  safety: path guard · write approval · {MAX_STEPS}-step limit"
+            f"\n         context trim ({MAX_CONTEXT_MESSAGES} msgs) · output verification"
             f"\n  trace : traces/*.jsonl"
             f"\n{'='*55}\n"
         )
@@ -642,7 +780,7 @@ async def main():
             print(f"     Progress: {done}/{total} steps completed.")
             print(f"     Type 'resume task' or inspect with /tasks\n")
 
-        print("type /models, /model <name>, /tools, /memory, /trace, /tasks, or just talk\n")
+        print("type /models, /model <name>, /tools, /memory, /trace, /tasks, /context, or just talk\n")
 
         try:
             while True:
