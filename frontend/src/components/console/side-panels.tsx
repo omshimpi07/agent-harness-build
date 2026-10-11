@@ -46,7 +46,13 @@ export function TelemetryPanel({ h }: { h: H }) {
             ))}
           </div>
         </Tile>
-        <Tile label="Total tokens" foot={<span className="font-mono">≈ ${(t.tokens / 1000 * COST_PER_1K).toFixed(4)} est.</span>}>
+        <Tile label="Total tokens" foot={
+          h.model === "local" ? (
+            <span className="font-mono text-emerald-400 font-medium">$0.0000 (Local Ollama · Free)</span>
+          ) : (
+            <span className="font-mono">≈ ${(t.tokens / 1000 * COST_PER_1K).toFixed(4)} est.</span>
+          )
+        }>
           <div className="font-mono text-xl font-semibold tabular-nums">{t.tokens.toLocaleString()}</div>
         </Tile>
         <Tile label="Tool invocations" foot={`${h.toolsAvailable} tools registered`}>

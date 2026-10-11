@@ -26,6 +26,7 @@ export function useHarness() {
   const [connected, setConnected] = useState(false);
   const [model, setModelState] = useState<ModelKey>("local");
   const [toolsAvailable, setToolsAvailable] = useState(12);
+  const [toolsList, setToolsList] = useState<import("@/lib/harness-types").ToolItem[]>([]);
   const [chat, setChat] = useState<ChatEntry[]>([]);
   const [trace, setTrace] = useState<TraceEvent[]>([]);
   const [audit, setAudit] = useState<AuditEvent[]>([]);
@@ -53,6 +54,7 @@ export function useHarness() {
     switch (msg.type) {
       case "init":
         if (msg.tools) setToolsAvailable(msg.tools);
+        if (msg.tools_list) setToolsList(msg.tools_list);
         if (msg.max_steps) setTelemetry((t) => ({ ...t, maxSteps: msg.max_steps! }));
         if (msg.task) setTask(msg.task);
         break;
@@ -279,6 +281,7 @@ export function useHarness() {
     model,
     setModel,
     toolsAvailable,
+    toolsList,
     chat,
     trace,
     audit,

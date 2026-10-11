@@ -135,6 +135,24 @@ async def get_models():
     }
 
 
+@app.get("/api/tools")
+async def get_tools():
+    """Return all 12 registered tools (Local Python + MCP external tools)."""
+    tools = []
+    for s in v5.TOOL_SCHEMAS:
+        fn = s.get("function", {})
+        name = fn.get("name", "")
+        source = "Local Python" if name in v5.LOCAL_TOOLS else "MCP External"
+        tools.append({
+            "name": name,
+            "description": fn.get("description", ""),
+            "source": source,
+            "parameters": fn.get("parameters", {}).get("properties", {}),
+            "requires_approval": name in v5.NEEDS_APPROVAL,
+        })
+    return {"tools": tools, "total": len(tools)}
+
+
 @app.post("/api/model/{name}")
 async def set_model(name: str):
     if name not in v5.MODELS:
@@ -219,11 +237,22 @@ async def websocket_endpoint(websocket: WebSocket):
                 ],
             }
 
+        tool_catalog = [
+            {
+                "name": s.get("function", {}).get("name", ""),
+                "description": s.get("function", {}).get("description", ""),
+                "source": "Local Python" if s.get("function", {}).get("name", "") in v5.LOCAL_TOOLS else "MCP External",
+                "requires_approval": s.get("function", {}).get("name", "") in v5.NEEDS_APPROVAL,
+            }
+            for s in v5.TOOL_SCHEMAS
+        ]
+
         # Send initial status snapshot matching Lovable useHarness hook
         await websocket.send_text(json.dumps({
             "type": "init",
             "model": v5.model_name,
             "tools": len(v5.TOOL_SCHEMAS),
+            "tools_list": tool_catalog,
             "max_steps": v5.MAX_STEPS,
             "task": task_payload,
         }))

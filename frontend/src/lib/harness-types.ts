@@ -55,8 +55,15 @@ export type ApprovalRequest = {
   content_preview: string;
 };
 
+export type ToolItem = {
+  name: string;
+  description: string;
+  source: string;
+  requires_approval: boolean;
+};
+
 export type ServerMessage =
-  | { type: "init"; tools?: number; max_steps?: number; task?: TaskState }
+  | { type: "init"; tools?: number; tools_list?: ToolItem[]; max_steps?: number; task?: TaskState }
   | { type: "run_started"; prompt?: string }
   | {
       type: "tool_call";
