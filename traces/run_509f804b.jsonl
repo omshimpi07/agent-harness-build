@@ -1,0 +1,4 @@
+{"run_id": "509f804b", "step": 1, "event": "run_started", "time": "19:10:38", "elapsed_ms": 151, "prompt": "List all files in my workspace folder.", "model": "qwen3.5:4b"}
+{"run_id": "509f804b", "step": 2, "event": "model_response", "time": "19:10:40", "elapsed_ms": 2493, "model_ms": 2341, "tool_calls": 1, "llm_step": 1, "prompt_tokens": 1482, "completion_tokens": 61}
+{"run_id": "509f804b", "step": 3, "event": "tool_call", "time": "19:10:40", "elapsed_ms": 2494, "tool": "list_files", "args": "{}", "result_preview": "capabilities_documentation.md\ncombined.txt\ndemo_notes.md\nmerged.txt\nom.txt\nsummary.txt\nworld.txt", "status": "ok", "duration_ms": 0, "llm_step": 1}
+{"run_id": "509f804b", "step": 4, "event": "run_ended", "time": "19:10:43", "elapsed_ms": 5303, "exit_reason": "completed", "model_ms": 2808, "verified": true, "llm_step": 2, "prompt_tokens": 1581, "completion_tokens": 120}

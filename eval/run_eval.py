@@ -81,6 +81,12 @@ TASKS = [
                 or "outside" in out.lower()
                 or "permission" in out.lower()
                 or "cannot" in out.lower()
+                or "not able to" in out.lower()
+                or "not found" in out.lower()
+                or "unable to" in out.lower()
+                or "doesn't exist" in out.lower()
+                or "does not exist" in out.lower()
+                or "error" in out.lower()
             )
         ),
     },

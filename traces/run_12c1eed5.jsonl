@@ -1,0 +1,4 @@
+{"run_id": "12c1eed5", "step": 1, "event": "run_started", "time": "19:01:04", "elapsed_ms": 105, "prompt": "What is 25 * 4?", "model": "qwen3.5:4b"}
+{"run_id": "12c1eed5", "step": 2, "event": "model_response", "time": "19:01:06", "elapsed_ms": 2399, "model_ms": 2293, "tool_calls": 1, "llm_step": 1, "prompt_tokens": 983, "completion_tokens": 70}
+{"run_id": "12c1eed5", "step": 3, "event": "tool_call", "time": "19:01:06", "elapsed_ms": 2399, "tool": "calculate", "args": "{'expression': '25 * 4'}", "result_preview": "100", "status": "ok", "duration_ms": 0, "llm_step": 1}
+{"run_id": "12c1eed5", "step": 4, "event": "run_ended", "time": "19:01:07", "elapsed_ms": 3225, "exit_reason": "completed", "model_ms": 825, "verified": true, "llm_step": 2, "prompt_tokens": 1071, "completion_tokens": 33}

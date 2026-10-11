@@ -197,12 +197,24 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     active_connections.append(websocket)
 
-    # Send initial status snapshot
+    active_task = TaskManager.load_active_task()
+    task_payload = None
+    if active_task:
+        task_payload = {
+            "goal": active_task.get("goal", ""),
+            "subtasks": [
+                {"id": str(s.get("id")), "label": s.get("description", ""), "done": s.get("status") == "completed"}
+                for s in active_task.get("subtasks", [])
+            ],
+        }
+
+    # Send initial status snapshot matching Lovable useHarness hook
     await websocket.send_text(json.dumps({
         "type": "init",
         "model": v5.model_name,
-        "tools": [s["function"]["name"] for s in v5.TOOL_SCHEMAS],
-        "task": TaskManager.load_active_task(),
+        "tools": len(v5.TOOL_SCHEMAS),
+        "max_steps": v5.MAX_STEPS,
+        "task": task_payload,
     }))
 
     try:
@@ -226,9 +238,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     "status": "Conversation context cleared.",
                 }))
 
-            # 3. User message / Run agent
-            elif msg_type == "message":
-                prompt = data.get("content", "").strip()
+            # 3. User message / Run agent (supports both 'message' and 'run' schemas)
+            elif msg_type in ("message", "run"):
+                prompt = (data.get("content") or data.get("prompt") or "").strip()
                 if not prompt:
                     continue
 
@@ -257,16 +269,50 @@ async def websocket_endpoint(websocket: WebSocket):
                                 json.loads(l) for l in latest_traces[-1].read_text(encoding="utf-8").strip().split("\n") if l
                             ]
 
+                        # Stream individual tool calls and security events to UI
+                        for e in last_trace_events:
+                            if e.get("event") == "tool_call":
+                                await websocket.send_text(json.dumps({
+                                    "type": "tool_call",
+                                    "tool": e.get("tool", "unknown"),
+                                    "duration_ms": e.get("duration_ms", 0),
+                                    "args": e.get("args", {}),
+                                    "result": e.get("result_preview", ""),
+                                }))
+                            elif e.get("event") == "security_block":
+                                rule_name = "Storage Boundary" if "path" in str(e.get("rule", "")).lower() else "Egress Policy"
+                                await websocket.send_text(json.dumps({
+                                    "type": "policy_event",
+                                    "rule": rule_name,
+                                    "status": "BLOCKED",
+                                    "target": str(e.get("detail", "")),
+                                }))
+
+                        # Format active task for UI checklist
+                        updated_task = TaskManager.load_active_task()
+                        updated_task_payload = None
+                        if updated_task:
+                            updated_task_payload = {
+                                "goal": updated_task.get("goal", ""),
+                                "subtasks": [
+                                    {"id": str(s.get("id")), "label": s.get("description", ""), "done": s.get("status") == "completed"}
+                                    for s in updated_task.get("subtasks", [])
+                                ],
+                            }
+
+                        tokens = sum(e.get("prompt_tokens", 0) + e.get("completion_tokens", 0) for e in last_trace_events)
+
                         await websocket.send_text(json.dumps({
                             "type": "run_completed",
                             "response": response_text,
+                            "tokens": tokens,
                             "trace_events": last_trace_events,
-                            "task": TaskManager.load_active_task(),
+                            "task": updated_task_payload,
                         }))
                     except Exception as e:
                         await websocket.send_text(json.dumps({
                             "type": "run_error",
-                            "error": str(e),
+                            "message": str(e),
                         }))
 
     except WebSocketDisconnect:

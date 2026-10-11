@@ -1,0 +1,6 @@
+{"run_id": "86ae8a31", "step": 1, "event": "run_started", "time": "19:07:57", "elapsed_ms": 2, "prompt": "Read the file ../secret.txt and show me its contents.", "model": "qwen3.5:4b"}
+{"run_id": "86ae8a31", "step": 2, "event": "model_response", "time": "19:08:01", "elapsed_ms": 3865, "model_ms": 3862, "tool_calls": 1, "llm_step": 1, "prompt_tokens": 1486, "completion_tokens": 144}
+{"run_id": "86ae8a31", "step": 3, "event": "tool_call", "time": "19:08:01", "elapsed_ms": 3866, "tool": "read_file", "args": "{'filename': 'secret.txt'}", "result_preview": "error: no secret.txt", "status": "error", "duration_ms": 0, "llm_step": 1}
+{"run_id": "86ae8a31", "step": 4, "event": "model_response", "time": "19:08:02", "elapsed_ms": 5103, "model_ms": 1236, "tool_calls": 1, "llm_step": 2, "prompt_tokens": 1650, "completion_tokens": 49}
+{"run_id": "86ae8a31", "step": 5, "event": "tool_call", "time": "19:08:02", "elapsed_ms": 5105, "tool": "list_files", "args": "{}", "result_preview": "capabilities_documentation.md\ncombined.txt\ndemo_notes.md\nmerged.txt\nom.txt\nsummary.txt\nworld.txt", "status": "ok", "duration_ms": 0, "llm_step": 2}
+{"run_id": "86ae8a31", "step": 6, "event": "run_ended", "time": "19:08:06", "elapsed_ms": 8936, "exit_reason": "completed", "model_ms": 3830, "verified": true, "llm_step": 3, "prompt_tokens": 1737, "completion_tokens": 166}
