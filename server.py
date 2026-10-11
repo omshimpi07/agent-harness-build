@@ -22,6 +22,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from contextlib import asynccontextmanager, AsyncExitStack
+
 import v5
 from task_manager import TaskManager
 from security import SEC_LOG_FILE
@@ -30,7 +32,20 @@ ROOT = Path(__file__).parent
 STATIC_DIR = ROOT / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 
-app = FastAPI(title="AI Agent Operations Console")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager: connects external MCP tool servers on boot."""
+    async with AsyncExitStack() as stack:
+        print("  [console] connecting MCP servers for agent harness...")
+        try:
+            await v5.connect_mcp(stack)
+        except Exception as e:
+            print(f"  [console] MCP connection notice: {e}")
+        yield
+
+
+app = FastAPI(title="AI Agent Operations Console", lifespan=lifespan)
 
 # Single-execution lock to prevent race conditions on v5.messages and tasks.json
 agent_lock = asyncio.Lock()
@@ -151,15 +166,20 @@ async def get_traces():
 async def get_security_log():
     if not SEC_LOG_FILE.exists():
         return []
-    try:
-        lines = [
-            json.loads(line)
-            for line in SEC_LOG_FILE.read_text(encoding="utf-8").strip().split("\n")
-            if line.strip()
-        ]
-        return lines[-20:]  # return last 20 violations
-    except Exception:
-        return []
+    records = []
+    for line in SEC_LOG_FILE.read_text(encoding="utf-8").strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except Exception:
+            records.append({
+                "time": line[:19] if len(line) >= 19 else "",
+                "event": "SECURITY_VIOLATION",
+                "message": line.split("]", 1)[-1].strip() if "]" in line else line,
+            })
+    return records[-20:]
 
 
 # ---------------------------------------------------------------------------
