@@ -204,30 +204,30 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close(code=1008)
         return
 
-    await websocket.accept()
-    active_connections.append(websocket)
-
-    active_task = TaskManager.load_active_task()
-    task_payload = None
-    if active_task:
-        task_payload = {
-            "goal": active_task.get("goal", ""),
-            "subtasks": [
-                {"id": str(s.get("id")), "label": s.get("description", ""), "done": s.get("status") == "completed"}
-                for s in active_task.get("subtasks", [])
-            ],
-        }
-
-    # Send initial status snapshot matching Lovable useHarness hook
-    await websocket.send_text(json.dumps({
-        "type": "init",
-        "model": v5.model_name,
-        "tools": len(v5.TOOL_SCHEMAS),
-        "max_steps": v5.MAX_STEPS,
-        "task": task_payload,
-    }))
-
     try:
+        await websocket.accept()
+        active_connections.append(websocket)
+
+        active_task = TaskManager.load_active_task()
+        task_payload = None
+        if active_task:
+            task_payload = {
+                "goal": active_task.get("goal", ""),
+                "subtasks": [
+                    {"id": str(s.get("id")), "label": s.get("description", ""), "done": s.get("status") == "completed"}
+                    for s in active_task.get("subtasks", [])
+                ],
+            }
+
+        # Send initial status snapshot matching Lovable useHarness hook
+        await websocket.send_text(json.dumps({
+            "type": "init",
+            "model": v5.model_name,
+            "tools": len(v5.TOOL_SCHEMAS),
+            "max_steps": v5.MAX_STEPS,
+            "task": task_payload,
+        }))
+
         while True:
             raw_data = await websocket.receive_text()
             data = json.loads(raw_data)
@@ -332,7 +332,9 @@ async def websocket_endpoint(websocket: WebSocket):
                             "message": str(e),
                         })
 
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
         if websocket in active_connections:
             active_connections.remove(websocket)
 
