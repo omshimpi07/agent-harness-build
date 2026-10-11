@@ -19,6 +19,7 @@ import sys
 
 sys.stdout.reconfigure(encoding="utf-8")  # so emoji don't crash the Windows console
 
+import ast
 import asyncio
 import json
 import os
@@ -177,16 +178,52 @@ def get_system_info() -> str:
     )
 
 
+def _eval_ast_node(node: ast.AST) -> float | int:
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    elif isinstance(node, ast.UnaryOp):
+        operand = _eval_ast_node(node.operand)
+        if isinstance(node.op, ast.UAdd):
+            return +operand
+        elif isinstance(node.op, ast.USub):
+            return -operand
+        raise ValueError(f"Unsupported unary operator: {type(node.op).__name__}")
+    elif isinstance(node, ast.BinOp):
+        left = _eval_ast_node(node.left)
+        right = _eval_ast_node(node.right)
+        if isinstance(node.op, ast.Add):
+            return left + right
+        elif isinstance(node.op, ast.Sub):
+            return left - right
+        elif isinstance(node.op, ast.Mult):
+            return left * right
+        elif isinstance(node.op, ast.Div):
+            if right == 0:
+                raise ZeroDivisionError("division by zero")
+            return left / right
+        elif isinstance(node.op, ast.FloorDiv):
+            if right == 0:
+                raise ZeroDivisionError("division by zero")
+            return left // right
+        elif isinstance(node.op, ast.Mod):
+            if right == 0:
+                raise ZeroDivisionError("division by zero")
+            return left % right
+        elif isinstance(node.op, ast.Pow):
+            if abs(right) > 100:
+                raise ValueError("Exponent exceeds maximum allowed magnitude (100)")
+            return left ** right
+        raise ValueError(f"Unsupported binary operator: {type(node.op).__name__}")
+    raise ValueError(f"Unsupported expression element: {type(node).__name__}")
+
+
 def calculate(expression: str) -> str:
-    """Safely evaluate basic mathematical expressions."""
-    import math
-    # Strict whitelist regex for safe math expressions
-    if not re.match(r"^[0-9\.\+\-\*\/\(\)\s\%]+$", expression):
-        return "error: expression contains forbidden characters or functions"
+    """Safely evaluate basic mathematical expressions via AST evaluation."""
+    if not expression or len(expression) > 100:
+        return "error: expression exceeds maximum length (100 characters)"
     try:
-        # Limited namespace for safe arithmetic
-        safe_dict = {"__builtins__": None, "math": math}
-        res = eval(expression, safe_dict, {})
+        parsed = ast.parse(expression.strip(), mode="eval")
+        res = _eval_ast_node(parsed.body)
         return str(res)
     except Exception as e:
         return f"error: invalid calculation ({e})"
@@ -287,7 +324,7 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "calculate",
-            "description": "Perform high-precision mathematical or arithmetic calculations (e.g., '128 * 45', 'sqrt(144)').",
+            "description": "Perform safe arithmetic calculations supporting +, -, *, /, //, %, ** (e.g., '450 * 12 + 85', '2 ** 10').",
             "parameters": {
                 "type": "object",
                 "properties": {"expression": {"type": "string"}},
