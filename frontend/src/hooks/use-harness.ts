@@ -19,7 +19,10 @@ import {
   buildScript,
 } from "@/lib/harness-sim";
 
-const WS_URL = "ws://localhost:8000/ws";
+const WS_URL =
+  typeof window !== "undefined"
+    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname || "127.0.0.1"}:8000/ws`
+    : "ws://127.0.0.1:8000/ws";
 
 export function useHarness() {
   const [connected, setConnected] = useState(false);
@@ -116,8 +119,10 @@ export function useHarness() {
     setChat((c) => [...c, { kind: "user", id: uid(), text: prompt, ts: nowTs() }]);
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
+      console.log("[Harness Console] Sending prompt to live backend:", prompt);
       ws.send(JSON.stringify({ type: "run", prompt, diagnostic: diag }));
     } else {
+      console.warn("[Harness Console] WebSocket is not open (state: " + ws?.readyState + "), falling back to simulation.");
       play(buildScript(prompt, diag));
     }
   }, [play]);
