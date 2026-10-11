@@ -79,22 +79,166 @@ export function JsonBlock({ value, className }: { value: unknown; className?: st
   );
 }
 
-/** Minimal markdown: paragraphs, bullet lists, **bold**, `code`. */
+/** Full-featured markdown renderer: headings, tables, numbered/bullet lists, bold, inline code, blockquotes, code blocks. */
 export function Markdown({ text }: { text: string }) {
   const inline = (s: string) =>
     s.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((p, i) =>
-      p.startsWith("**") ? <strong key={i} className="font-semibold text-foreground">{p.slice(2, -2)}</strong>
-      : p.startsWith("`") ? <code key={i} className="rounded bg-secondary px-1 py-0.5 font-mono text-[12px] text-primary">{p.slice(1, -1)}</code>
-      : p,
+      p.startsWith("**") ? (
+        <strong key={i} className="font-semibold text-foreground">
+          {p.slice(2, -2)}
+        </strong>
+      ) : p.startsWith("`") ? (
+        <code key={i} className="rounded bg-secondary px-1 py-0.5 font-mono text-[12px] text-primary">
+          {p.slice(1, -1)}
+        </code>
+      ) : (
+        p
+      )
     );
-  return (
-    <div className="space-y-2 text-[13.5px] leading-relaxed text-foreground/90">
-      {text.split(/\n\n+/).map((block, i) => {
-        const lines = block.split("\n");
-        if (lines.every((l) => l.startsWith("- ")))
-          return <ul key={i} className="ml-4 list-disc space-y-1 marker:text-muted-foreground">{lines.map((l, j) => <li key={j}>{inline(l.slice(2))}</li>)}</ul>;
-        return <p key={i}>{inline(block)}</p>;
-      })}
-    </div>
-  );
+
+  // Split content by double newlines or single newlines for headers/tables
+  const rawLines = text.split("\n");
+  const elements: ReactNode[] = [];
+  let i = 0;
+
+  while (i < rawLines.length) {
+    const line = rawLines[i];
+    const trimmed = line.trim();
+
+    // Empty line
+    if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    // Horizontal Rule
+    if (/^---$|^\*\*\*$|^___$/.test(trimmed)) {
+      elements.push(<hr key={i} className="my-3 border-border" />);
+      i++;
+      continue;
+    }
+
+    // Headings
+    if (trimmed.startsWith("### ")) {
+      elements.push(
+        <h4 key={i} className="mt-3 mb-1 text-[13.5px] font-semibold text-foreground">
+          {inline(trimmed.slice(4))}
+        </h4>
+      );
+      i++;
+      continue;
+    }
+    if (trimmed.startsWith("## ")) {
+      elements.push(
+        <h3 key={i} className="mt-4 mb-1.5 text-[15px] font-semibold tracking-tight text-foreground border-b border-border/60 pb-1">
+          {inline(trimmed.slice(3))}
+        </h3>
+      );
+      i++;
+      continue;
+    }
+    if (trimmed.startsWith("# ")) {
+      elements.push(
+        <h2 key={i} className="mt-4 mb-2 text-[16px] font-bold tracking-tight text-foreground">
+          {inline(trimmed.slice(2))}
+        </h2>
+      );
+      i++;
+      continue;
+    }
+
+    // Blockquote
+    if (trimmed.startsWith("> ")) {
+      elements.push(
+        <blockquote key={i} className="my-2 border-l-2 border-primary/50 pl-3 italic text-muted-foreground text-[13px]">
+          {inline(trimmed.slice(2))}
+        </blockquote>
+      );
+      i++;
+      continue;
+    }
+
+    // Markdown Table
+    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      const tableLines: string[] = [];
+      while (i < rawLines.length && rawLines[i].trim().startsWith("|") && rawLines[i].trim().endsWith("|")) {
+        tableLines.push(rawLines[i].trim());
+        i++;
+      }
+      if (tableLines.length >= 2) {
+        const headerRow = tableLines[0].split("|").slice(1, -1).map((c) => c.trim());
+        const contentRows = tableLines.slice(1).filter((r) => !/^[|\s:-]+$/.test(r)).map((r) =>
+          r.split("|").slice(1, -1).map((c) => c.trim())
+        );
+
+        elements.push(
+          <div key={`table-${i}`} className="my-3 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-left text-[12.5px]">
+              <thead className="border-b border-border bg-secondary/50 font-semibold text-muted-foreground">
+                <tr>
+                  {headerRow.map((h, hi) => (
+                    <th key={hi} className="px-3 py-2 font-mono text-[11.5px]">{inline(h)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {contentRows.map((row, ri) => (
+                  <tr key={ri} className="hover:bg-secondary/20">
+                    {row.map((cell, ci) => (
+                      <td key={ci} className="px-3 py-1.5 text-foreground/90">{inline(cell)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        continue;
+      }
+    }
+
+    // Bullet List (- or *)
+    if (/^[-*]\s+/.test(trimmed)) {
+      const listItems: string[] = [];
+      while (i < rawLines.length && /^[-*]\s+/.test(rawLines[i].trim())) {
+        listItems.push(rawLines[i].trim().replace(/^[-*]\s+/, ""));
+        i++;
+      }
+      elements.push(
+        <ul key={`ul-${i}`} className="my-1.5 ml-4 list-disc space-y-1 marker:text-primary">
+          {listItems.map((item, li) => (
+            <li key={li} className="text-[13px] text-foreground/90 leading-relaxed">{inline(item)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    // Numbered List (1. 2. etc)
+    if (/^\d+\.\s+/.test(trimmed)) {
+      const listItems: string[] = [];
+      while (i < rawLines.length && /^\d+\.\s+/.test(rawLines[i].trim())) {
+        listItems.push(rawLines[i].trim().replace(/^\d+\.\s+/, ""));
+        i++;
+      }
+      elements.push(
+        <ol key={`ol-${i}`} className="my-1.5 ml-4 list-decimal space-y-1 marker:text-muted-foreground font-medium">
+          {listItems.map((item, li) => (
+            <li key={li} className="text-[13px] text-foreground/90 font-normal leading-relaxed">{inline(item)}</li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+
+    // Regular Paragraph
+    elements.push(
+      <p key={i} className="text-[13px] leading-relaxed text-foreground/90">
+        {inline(line)}
+      </p>
+    );
+    i++;
+  }
+
+  return <div className="space-y-2">{elements}</div>;
 }
