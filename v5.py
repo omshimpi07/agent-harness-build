@@ -58,7 +58,29 @@ MAX_CONTEXT_MESSAGES = 20  # sliding window: keep system prompt + last N message
 # ---------------------------------------------------------------------------
 
 APPROVE_WRITES: str = "ask"  # "ask" | "auto" | "deny"
+NEEDS_APPROVAL: set[str] = {"write_file"}
 MAX_TOOL_CHARS: int = 4000  # Truncate tool outputs to avoid context blowout on small models
+
+
+def _sync_cli_prompt(tool: str, args: dict) -> bool:
+    target = args.get("filename", "")
+    content = args.get("content", "")
+    print(f"\n  ⚠️  WRITE REQUEST: {target}")
+    print(f"  Content preview: {content[:200]}{'...' if len(content) > 200 else ''}")
+    try:
+        ans = input("  Approve write? (y/n): ").strip().lower()
+        return ans == "y"
+    except (EOFError, KeyboardInterrupt):
+        return False
+
+
+async def default_approval_handler(tool: str, args: dict) -> bool:
+    """Default CLI approval handler: runs terminal input non-blockingly via asyncio.to_thread."""
+    return await asyncio.to_thread(_sync_cli_prompt, tool, args)
+
+
+# Pluggable approval handler hook (can be overridden by WebSockets/UI)
+approval_handler = default_approval_handler
 
 
 # ---------------------------------------------------------------------------
@@ -142,20 +164,6 @@ def read_file(filename: str) -> str:
 
 def write_file(filename: str, content: str) -> str:
     path = _safe_path(filename)  # ← path traversal guard
-
-    # Human-in-the-loop approval gate
-    if APPROVE_WRITES == "deny":
-        return "error: write denied by policy (APPROVE_WRITES=deny)"
-    elif APPROVE_WRITES == "ask":
-        print(f"\n  ⚠️  WRITE REQUEST: {filename}")
-        print(f"  Content preview: {content[:200]}{'...' if len(content) > 200 else ''}")
-        try:
-            approval = input("  Approve write? (y/n): ").strip().lower()
-        except EOFError:
-            approval = "n"
-        if approval != "y":
-            return "error: write denied by user"
-    # If APPROVE_WRITES == "auto", proceed without prompting
     path.write_text(content, encoding="utf-8")
     return f"wrote {len(content)} bytes to {filename}"
 
@@ -513,6 +521,15 @@ async def call_tool(name: str, args: dict) -> str:
     if name == "fetch" and "url" in args:
         # Validate URL against SSRF / private IP traversal
         sandbox.validate_url(args["url"])
+
+    # Human-in-the-loop approval gate for sensitive actions
+    if name in NEEDS_APPROVAL:
+        if APPROVE_WRITES == "deny":
+            return "error: write denied by policy (APPROVE_WRITES=deny)"
+        elif APPROVE_WRITES == "ask":
+            approved = await approval_handler(name, args)
+            if not approved:
+                return "error: write denied by user"
 
     if name in LOCAL_TOOLS:
         res = LOCAL_TOOLS[name](**args)
