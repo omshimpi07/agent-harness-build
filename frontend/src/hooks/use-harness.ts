@@ -64,18 +64,25 @@ export function useHarness() {
         break;
 
       case "tool_call":
-        setChat((c) => [
-          ...c,
-          {
-            kind: "tool",
-            id: uid(),
-            tool: msg.tool,
-            durationMs: msg.duration_ms ?? 0,
-            args: msg.args ?? {},
-            result: msg.result,
-            ts,
-          },
-        ]);
+        setChat((c) => {
+          // Prevent exact duplicate tool calls within the same second
+          const last = c[c.length - 1];
+          if (last && last.kind === "tool" && last.tool === msg.tool && JSON.stringify(last.args) === JSON.stringify(msg.args ?? {})) {
+            return c;
+          }
+          return [
+            ...c,
+            {
+              kind: "tool",
+              id: uid(),
+              tool: msg.tool,
+              durationMs: msg.duration_ms ?? 0,
+              args: msg.args ?? {},
+              result: msg.result,
+              ts,
+            },
+          ];
+        });
         setTelemetry((t) => ({
           ...t,
           steps: Math.min(t.steps + 1, t.maxSteps),
@@ -125,10 +132,17 @@ export function useHarness() {
 
       case "run_completed":
         if (msg.response) {
-          setChat((c) => [
-            ...c,
-            { kind: "assistant", id: uid(), text: msg.response!, ts, tokens: msg.tokens },
-          ]);
+          setChat((c) => {
+            // Deduplicate if identical response was already appended as the last message
+            const last = c[c.length - 1];
+            if (last && last.kind === "assistant" && last.text === msg.response) {
+              return c;
+            }
+            return [
+              ...c,
+              { kind: "assistant", id: uid(), text: msg.response!, ts, tokens: msg.tokens },
+            ];
+          });
         }
         setTelemetry((t) => ({
           ...t,
