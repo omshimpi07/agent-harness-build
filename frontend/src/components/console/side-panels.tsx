@@ -52,7 +52,7 @@ export function TelemetryPanel({ h }: { h: H }) {
         <Tile label="Tool invocations" foot={`${h.toolsAvailable} tools registered`}>
           <div className="font-mono text-xl font-semibold tabular-nums">{t.toolCount}</div>
         </Tile>
-        <Tile label="Run status" foot={h.connected ? "Live server" : "Simulation engine"}>
+        <Tile label="Run status" foot={h.connected ? "Live server (127.0.0.1:8000)" : "Connecting…"}>
           <Badge tone={statusTone} className="mt-1 px-2 py-1 text-[11.5px]">
             {t.status === "RUNNING" && <Loader2 className="h-3 w-3 animate-spin" />}{t.status}
           </Badge>

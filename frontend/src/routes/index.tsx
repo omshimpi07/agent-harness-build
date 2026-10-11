@@ -69,7 +69,7 @@ function Console() {
             <div className="hidden items-center gap-2 md:flex">
               <Badge tone={h.connected ? "ok" : "warn"} className="h-7 px-2.5 text-[11.5px]">
                 <LiveDot tone={h.connected ? "ok" : "warn"} />
-                {h.connected ? <>Connected <span className="font-mono opacity-80">(127.0.0.1:8000)</span></> : "Simulation · offline"}
+                {h.connected ? <>Connected <span className="font-mono opacity-80">(127.0.0.1:8000)</span></> : "Connecting to Harness…"}
               </Badge>
               <Badge className="h-7 px-2.5 text-[11.5px]">Limit: <span className="font-mono text-foreground">{h.telemetry.maxSteps}</span> Steps</Badge>
               <Badge className="h-7 px-2.5 text-[11.5px]"><Wrench className="h-3 w-3" /><span className="font-mono text-foreground">{h.toolsAvailable}</span> Tools</Badge>

@@ -272,11 +272,18 @@ async def websocket_endpoint(websocket: WebSocket):
                         # Stream individual tool calls and security events to UI
                         for e in last_trace_events:
                             if e.get("event") == "tool_call":
+                                tool_args = e.get("args", {})
+                                if isinstance(tool_args, str):
+                                    try:
+                                        import ast
+                                        tool_args = ast.literal_eval(tool_args)
+                                    except Exception:
+                                        tool_args = {"raw": tool_args}
                                 await websocket.send_text(json.dumps({
                                     "type": "tool_call",
                                     "tool": e.get("tool", "unknown"),
                                     "duration_ms": e.get("duration_ms", 0),
-                                    "args": e.get("args", {}),
+                                    "args": tool_args if isinstance(tool_args, dict) else {"value": str(tool_args)},
                                     "result": e.get("result_preview", ""),
                                 }))
                             elif e.get("event") == "security_block":
