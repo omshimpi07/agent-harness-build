@@ -16,13 +16,19 @@ import socket
 from pathlib import Path
 from urllib.parse import urlparse
 
-# Audit logger for security violations
+# Dedicated audit logger for security violations (does not hijack root logger)
 SEC_LOG_FILE = Path(__file__).parent / "security_audit.log"
-logging.basicConfig(
-    filename=str(SEC_LOG_FILE),
-    level=logging.WARNING,
-    format="%(asctime)s [%(levelname)s] [SECURITY_VIOLATION] %(message)s",
-)
+sec_logger = logging.getLogger("harness.security")
+sec_logger.setLevel(logging.WARNING)
+sec_logger.propagate = False
+if not sec_logger.handlers:
+    _fh = logging.FileHandler(str(SEC_LOG_FILE), encoding="utf-8")
+    _fh.setFormatter(
+        logging.Formatter(
+            '{"time": "%(asctime)s", "level": "%(levelname)s", "event": "SECURITY_VIOLATION", "message": "%(message)s"}'
+        )
+    )
+    sec_logger.addHandler(_fh)
 
 
 class SecurityViolation(PermissionError):
@@ -55,7 +61,7 @@ class Sandbox:
 
         # Disallow explicit null bytes
         if "\0" in filename:
-            logging.warning(f"Null byte injection detected in path: {repr(filename)}")
+            sec_logger.warning(f"Null byte injection detected in path: {repr(filename)}")
             raise SecurityViolation("Null byte injection detected.")
 
         raw_path = Path(filename)
@@ -71,7 +77,7 @@ class Sandbox:
         try:
             target.relative_to(self.workspace)
         except ValueError:
-            logging.warning(f"Path traversal blocked: '{filename}' -> resolved as '{target}'")
+            sec_logger.warning(f"Path traversal blocked: '{filename}' -> resolved as '{target}'")
             raise SecurityViolation(
                 f"Access denied: '{filename}' resolves outside designated workspace."
             )
@@ -96,7 +102,7 @@ class Sandbox:
         scheme = parsed.scheme.lower()
 
         if scheme not in ("http", "https"):
-            logging.warning(f"Blocked invalid URL scheme: {url}")
+            sec_logger.warning(f"Blocked invalid URL scheme: {url}")
             raise SecurityViolation(f"Protocol '{scheme}' forbidden. Only http/https permitted.")
 
         hostname = parsed.hostname
@@ -105,14 +111,14 @@ class Sandbox:
 
         # Block common literal loopback/unspecified hostnames
         if hostname.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0", "::"):
-            logging.warning(f"SSRF Loopback blocked: {url}")
+            sec_logger.warning(f"SSRF Loopback blocked: {url}")
             raise SecurityViolation("Access to loopback interface is blocked.")
 
         # Resolve DNS to check ALL returned IPv4 and IPv6 addresses
         try:
             addr_info = socket.getaddrinfo(hostname, None)
         except (socket.gaierror, UnicodeError) as e:
-            logging.warning(f"SSRF DNS resolution failed (fail-closed): {url} ({e})")
+            sec_logger.warning(f"SSRF DNS resolution failed (fail-closed): {url} ({e})")
             raise SecurityViolation(f"SSRF guard: failed to resolve host '{hostname}'. Access denied.")
 
         if not addr_info:
@@ -138,7 +144,7 @@ class Sandbox:
                     or target_ip.is_reserved
                     or target_ip.is_multicast
                 ):
-                    logging.warning(f"SSRF Blocked: {url} resolved to non-public IP {target_ip}")
+                    sec_logger.warning(f"SSRF Blocked: {url} resolved to non-public IP {target_ip}")
                     raise SecurityViolation(
                         f"Access to private/internal network IP ({target_ip}) is forbidden."
                     )
@@ -152,9 +158,11 @@ class Sandbox:
     def mask_secrets(text: str) -> str:
         """Masks detected API keys or tokens from traces and logs."""
         patterns = [
-            (r"(sk-[a-zA-Z0-9_-]{20,})", r"sk-***[MASKED]***"),
-            (r"(ghp_[a-zA-Z0-9]{20,})", r"ghp_***[MASKED]***"),
-            (r"(Bearer\s+[a-zA-Z0-9_\-\.]{20,})", r"Bearer ***[MASKED]***"),
+            (r"\b(sk-[a-zA-Z0-9_-]{20,})", r"sk-***[MASKED]***"),
+            (r"\b(ghp_[a-zA-Z0-9]{20,})", r"ghp_***[MASKED]***"),
+            (r"\b(Bearer\s+[a-zA-Z0-9_\-\.]{20,})", r"Bearer ***[MASKED]***"),
+            (r"\b(AKIA[0-9A-Z]{16})\b", r"AKIA***[MASKED]***"),
+            (r"\b(AIza[0-9A-Za-z_-]{30,40})\b", r"AIza***[MASKED]***"),
         ]
         sanitized = text
         for pat, repl in patterns:
